@@ -107,6 +107,7 @@
   .card-group:hover { color: var(--text2); }
   .card-time { font-size: 13px; color: var(--text3); }
   .card-time.live { color: var(--live); font-weight: 600; }
+  .card-break { font-size: 11px; color: #38bdf8; background: rgba(56,189,248,0.12); border-radius: 4px; padding: 3px 8px; margin-bottom: 8px; text-align: center; }
   .card-teams { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .ct-home { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
   .ct-flag { font-size: 22px; flex-shrink: 0; line-height: 1; }
@@ -354,6 +355,7 @@ const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
 // ─── RESULTS & STANDINGS (populated by fetchLiveData) ────────────────────────
 const RESULTS   = {};
 const STANDINGS = {};
+const CLOCKS    = {}; // matchId → ESPN displayClock string for live games
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -431,10 +433,15 @@ async function fetchLiveData() {
       );
       if (!match) continue;
       ESPN_STATES[match.id] = state;
-      if (state === 'post' || state === 'in') {
+      if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
+        CLOCKS[match.id]  = comp.status.type.shortDetail || null;
+      } else if (state === 'post') {
+        RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
+        delete CLOCKS[match.id];
       } else {
         delete RESULTS[match.id];
+        delete CLOCKS[match.id];
       }
     }
 
@@ -484,32 +491,42 @@ function matchStatus(m) {
 }
 
 function countdownText(m) {
-  const now = Date.now();
+  const espnState = ESPN_STATES[m.id];
+  const now   = Date.now();
   const start = m.kickoff.getTime();
+
+  // Use ESPN state as authoritative source when available
+  if (espnState === 'in') {
+    const clock = CLOCKS[m.id]; // shortDetail e.g. "45'", "HT", "90'+3'"
+    const display = clock || `${Math.floor((now - start) / 60000)}'`;
+    return { text: `LIVE · ${display}`, cls: 'live' };
+  }
+  if (espnState === 'post') return { text: 'Full time', cls: 'done' };
+
+  // Pre-fetch / pre-game fallback
+  if (now < start) {
+    const diff = start - now;
+    const days = Math.floor(diff / 86400000);
+    const hrs  = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    let text, cls = '';
+    if (days > 0) {
+      text = `in ${days}d ${hrs}h`;
+    } else if (hrs > 0) {
+      text = `in ${hrs}h ${mins}m`;
+      if (hrs < 1) cls = 'soon';
+    } else {
+      text = `in ${mins}m`;
+      cls = 'soon';
+    }
+    return { text, cls };
+  }
+
+  // Time-based fallback when ESPN data not yet loaded
   const end = start + 110 * 60 * 1000;
-
   if (now >= end) return { text: 'Full time', cls: 'done' };
-  if (now >= start) {
-    const elapsed = Math.floor((now - start) / 60000);
-    return { text: `LIVE · ${elapsed}'`, cls: 'live' };
-  }
-
-  const diff = start - now;
-  const days = Math.floor(diff / 86400000);
-  const hrs  = Math.floor((diff % 86400000) / 3600000);
-  const mins = Math.floor((diff % 3600000) / 60000);
-
-  let text, cls = '';
-  if (days > 0) {
-    text = `in ${days}d ${hrs}h`;
-  } else if (hrs > 0) {
-    text = `in ${hrs}h ${mins}m`;
-    if (hrs < 1) cls = 'soon';
-  } else {
-    text = `in ${mins}m`;
-    cls = 'soon';
-  }
-  return { text, cls };
+  const elapsed = Math.floor((now - start) / 60000);
+  return { text: `LIVE · ${elapsed}'`, cls: 'live' };
 }
 
 function filterMatches() {
@@ -619,23 +636,35 @@ function renderMatchList() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(d);
   }
 
+  function liveBreakLabel(clock) {
+    if (!clock) return null;
+    if (/water\s*break|cooling\s*break/i.test(clock)) return '💧 Water Break';
+    if (/^HT$|half.?time/i.test(clock))               return '⏸ Half Time';
+    if (/ET\s*HT|extra.?time.?half/i.test(clock))     return '⏸ Extra Time HT';
+    if (/penalt/i.test(clock))                         return '🎯 Penalty Shootout';
+    return null;
+  }
+
   function cardHtml(m) {
     const { text, cls } = countdownText(m);
     const isLive = cls === 'live';
     const result = RESULTS[m.id];
     const isDone = matchStatus(m) === 'completed';
+    const clock = CLOCKS[m.id] || '';
+    const breakLabel = isLive ? liveBreakLabel(clock) : null;
     return `
       <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
         <div class="card-top">
           <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
           <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? text : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
         </div>
+        ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
         <div class="card-teams">
           <div class="ct-home">
             <span class="ct-flag">${teamFlag(m.home)}</span>
             <span class="ct-name">${m.home}</span>
           </div>
-          <span class="ct-vs">${isDone ? `${result.hs} – ${result.as}` : isLive ? '–' : 'vs'}</span>
+          <span class="ct-vs">${(isDone || isLive) && result ? `${result.hs} – ${result.as}` : isLive ? '–' : 'vs'}</span>
           <div class="ct-away">
             <span class="ct-name">${m.away}</span>
             <span class="ct-flag">${teamFlag(m.away)}</span>
@@ -760,13 +789,16 @@ function tickCountdowns() {
     const isLive = cls === 'live';
     el.textContent = isLive ? '' : text;
     el.className = 'card-cd' + (cls ? ' ' + cls : '');
-    // also update the top-right time chip
-    const card = el.closest('.match-card');
-    if (card) {
-      const timeEl = card.querySelector('.card-time');
-      if (timeEl) {
-        timeEl.textContent = isLive ? text : fmtTime.format(m.kickoff);
-        timeEl.className = 'card-time' + (isLive ? ' live' : '');
+    // update the top-right time chip for upcoming games only;
+    // live game clock updates via renderMatchList on each 30s ESPN fetch
+    if (!isLive) {
+      const card = el.closest('.match-card');
+      if (card) {
+        const timeEl = card.querySelector('.card-time');
+        if (timeEl) {
+          timeEl.textContent = fmtTime.format(m.kickoff);
+          timeEl.className = 'card-time';
+        }
       }
     }
   });
