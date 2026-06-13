@@ -434,7 +434,7 @@ async function fetchLiveData() {
       ESPN_STATES[match.id] = state;
       if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
-        CLOCKS[match.id]  = comp.status.displayClock || null;
+        CLOCKS[match.id]  = comp.status.type.shortDetail || null;
       } else if (state === 'post') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         delete CLOCKS[match.id];
@@ -496,10 +496,9 @@ function countdownText(m) {
 
   // Use ESPN state as authoritative source when available
   if (espnState === 'in') {
-    const clock = CLOCKS[m.id];
-    // ESPN displayClock is "MM:SS" — parseInt stops at colon, giving minutes
-    const mins = clock ? parseInt(clock) : Math.floor((now - start) / 60000);
-    return { text: `LIVE · ${mins}'`, cls: 'live' };
+    const clock = CLOCKS[m.id]; // shortDetail e.g. "45'", "HT", "90'+3'"
+    const display = clock || `${Math.floor((now - start) / 60000)}'`;
+    return { text: `LIVE · ${display}`, cls: 'live' };
   }
   if (espnState === 'post') return { text: 'Full time', cls: 'done' };
 
@@ -777,13 +776,16 @@ function tickCountdowns() {
     const isLive = cls === 'live';
     el.textContent = isLive ? '' : text;
     el.className = 'card-cd' + (cls ? ' ' + cls : '');
-    // also update the top-right time chip
-    const card = el.closest('.match-card');
-    if (card) {
-      const timeEl = card.querySelector('.card-time');
-      if (timeEl) {
-        timeEl.textContent = isLive ? text : fmtTime.format(m.kickoff);
-        timeEl.className = 'card-time' + (isLive ? ' live' : '');
+    // update the top-right time chip for upcoming games only;
+    // live game clock updates via renderMatchList on each 30s ESPN fetch
+    if (!isLive) {
+      const card = el.closest('.match-card');
+      if (card) {
+        const timeEl = card.querySelector('.card-time');
+        if (timeEl) {
+          timeEl.textContent = fmtTime.format(m.kickoff);
+          timeEl.className = 'card-time';
+        }
       }
     }
   });
