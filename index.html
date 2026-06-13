@@ -354,6 +354,7 @@ const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
 // ─── RESULTS & STANDINGS (populated by fetchLiveData) ────────────────────────
 const RESULTS   = {};
 const STANDINGS = {};
+const CLOCKS    = {}; // matchId → ESPN displayClock string for live games
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -431,10 +432,15 @@ async function fetchLiveData() {
       );
       if (!match) continue;
       ESPN_STATES[match.id] = state;
-      if (state === 'post' || state === 'in') {
+      if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
+        CLOCKS[match.id]  = comp.status.displayClock || null;
+      } else if (state === 'post') {
+        RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
+        delete CLOCKS[match.id];
       } else {
         delete RESULTS[match.id];
+        delete CLOCKS[match.id];
       }
     }
 
@@ -484,32 +490,43 @@ function matchStatus(m) {
 }
 
 function countdownText(m) {
-  const now = Date.now();
+  const espnState = ESPN_STATES[m.id];
+  const now   = Date.now();
   const start = m.kickoff.getTime();
+
+  // Use ESPN state as authoritative source when available
+  if (espnState === 'in') {
+    const clock = CLOCKS[m.id];
+    // ESPN displayClock is "MM:SS" — parseInt stops at colon, giving minutes
+    const mins = clock ? parseInt(clock) : Math.floor((now - start) / 60000);
+    return { text: `LIVE · ${mins}'`, cls: 'live' };
+  }
+  if (espnState === 'post') return { text: 'Full time', cls: 'done' };
+
+  // Pre-fetch / pre-game fallback
+  if (now < start) {
+    const diff = start - now;
+    const days = Math.floor(diff / 86400000);
+    const hrs  = Math.floor((diff % 86400000) / 3600000);
+    const mins = Math.floor((diff % 3600000) / 60000);
+    let text, cls = '';
+    if (days > 0) {
+      text = `in ${days}d ${hrs}h`;
+    } else if (hrs > 0) {
+      text = `in ${hrs}h ${mins}m`;
+      if (hrs < 1) cls = 'soon';
+    } else {
+      text = `in ${mins}m`;
+      cls = 'soon';
+    }
+    return { text, cls };
+  }
+
+  // Time-based fallback when ESPN data not yet loaded
   const end = start + 110 * 60 * 1000;
-
   if (now >= end) return { text: 'Full time', cls: 'done' };
-  if (now >= start) {
-    const elapsed = Math.floor((now - start) / 60000);
-    return { text: `LIVE · ${elapsed}'`, cls: 'live' };
-  }
-
-  const diff = start - now;
-  const days = Math.floor(diff / 86400000);
-  const hrs  = Math.floor((diff % 86400000) / 3600000);
-  const mins = Math.floor((diff % 3600000) / 60000);
-
-  let text, cls = '';
-  if (days > 0) {
-    text = `in ${days}d ${hrs}h`;
-  } else if (hrs > 0) {
-    text = `in ${hrs}h ${mins}m`;
-    if (hrs < 1) cls = 'soon';
-  } else {
-    text = `in ${mins}m`;
-    cls = 'soon';
-  }
-  return { text, cls };
+  const elapsed = Math.floor((now - start) / 60000);
+  return { text: `LIVE · ${elapsed}'`, cls: 'live' };
 }
 
 function filterMatches() {
@@ -635,7 +652,7 @@ function renderMatchList() {
             <span class="ct-flag">${teamFlag(m.home)}</span>
             <span class="ct-name">${m.home}</span>
           </div>
-          <span class="ct-vs">${isDone ? `${result.hs} – ${result.as}` : isLive ? '–' : 'vs'}</span>
+          <span class="ct-vs">${(isDone || isLive) && result ? `${result.hs} – ${result.as}` : isLive ? '–' : 'vs'}</span>
           <div class="ct-away">
             <span class="ct-name">${m.away}</span>
             <span class="ct-flag">${teamFlag(m.away)}</span>
