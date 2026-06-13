@@ -636,20 +636,29 @@ function renderMatchList() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(d);
   }
 
+  function liveBreakLabel(clock) {
+    if (!clock) return null;
+    if (/water\s*break|cooling\s*break/i.test(clock)) return '💧 Water Break';
+    if (/^HT$|half.?time/i.test(clock))               return '⏸ Half Time';
+    if (/ET\s*HT|extra.?time.?half/i.test(clock))     return '⏸ Extra Time HT';
+    if (/penalt/i.test(clock))                         return '🎯 Penalty Shootout';
+    return null;
+  }
+
   function cardHtml(m) {
     const { text, cls } = countdownText(m);
     const isLive = cls === 'live';
     const result = RESULTS[m.id];
     const isDone = matchStatus(m) === 'completed';
     const clock = CLOCKS[m.id] || '';
-    const isWaterBreak = isLive && /break/i.test(clock);
+    const breakLabel = isLive ? liveBreakLabel(clock) : null;
     return `
       <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
         <div class="card-top">
           <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
           <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? text : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
         </div>
-        ${isWaterBreak ? '<div class="card-break">💧 Water Break</div>' : ''}
+        ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
         <div class="card-teams">
           <div class="ct-home">
             <span class="ct-flag">${teamFlag(m.home)}</span>
