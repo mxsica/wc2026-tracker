@@ -107,6 +107,7 @@
   .card-group:hover { color: var(--text2); }
   .card-time { font-size: 13px; color: var(--text3); }
   .card-time.live { color: var(--live); font-weight: 600; }
+  .card-break { font-size: 11px; color: #38bdf8; background: rgba(56,189,248,0.12); border-radius: 4px; padding: 3px 8px; margin-bottom: 8px; text-align: center; }
   .card-teams { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .ct-home { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
   .ct-flag { font-size: 22px; flex-shrink: 0; line-height: 1; }
@@ -640,12 +641,15 @@ function renderMatchList() {
     const isLive = cls === 'live';
     const result = RESULTS[m.id];
     const isDone = matchStatus(m) === 'completed';
+    const clock = CLOCKS[m.id] || '';
+    const isWaterBreak = isLive && /break/i.test(clock);
     return `
       <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
         <div class="card-top">
           <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
           <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? text : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
         </div>
+        ${isWaterBreak ? '<div class="card-break">💧 Water Break</div>' : ''}
         <div class="card-teams">
           <div class="ct-home">
             <span class="ct-flag">${teamFlag(m.home)}</span>
