@@ -115,6 +115,8 @@
   .ct-vs { font-size: 20px; color: var(--text3); flex-shrink: 0; padding: 0 4px; line-height: 1; }
   .ct-away { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; justify-content: flex-end; }
   .ct-away .ct-name { text-align: right; }
+  .card-scorers { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: 12px; color: var(--text3); line-height: 1.4; }
+  .card-scorers-away { text-align: right; }
   .card-bottom { display: flex; justify-content: space-between; align-items: center; }
   .card-venue { font-size: 12px; color: var(--text3); }
   .card-cd { font-size: 12px; color: var(--text3); }
@@ -353,9 +355,12 @@ function mapEspnName(n) { return ESPN_NAME_MAP[n] || n; }
 const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
 
 // ─── RESULTS & STANDINGS (populated by fetchLiveData) ────────────────────────
-const RESULTS   = {};
-const STANDINGS = {};
-const CLOCKS    = {}; // matchId → ESPN displayClock string for live games
+const RESULTS        = {};
+const STANDINGS      = {};
+const CLOCKS         = {}; // matchId → ESPN displayClock string for live games
+const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fetches)
+const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
+const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -434,6 +439,7 @@ async function fetchLiveData() {
         m.away === mapEspnName(awayC.team.displayName)
       );
       if (!match) continue;
+      ESPN_EVENT_IDS[match.id] = event.id;
       ESPN_STATES[match.id] = state;
       if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
@@ -451,11 +457,56 @@ async function fetchLiveData() {
     renderMatchList();
     if (currentTab === 'brackets') renderBrackets();
     checkPolling();
+
+    // Fetch scorers for live + not-yet-cached completed matches, then re-render
+    const scorerTargets = MATCHES.filter(m => {
+      const s = ESPN_STATES[m.id];
+      return (s === 'in') || (s === 'post' && !SCORER_DONE.has(m.id));
+    }).filter(m => ESPN_EVENT_IDS[m.id]);
+    if (scorerTargets.length) {
+      await Promise.all(scorerTargets.map(fetchMatchScorers));
+      renderMatchList();
+    }
   } catch (e) {
     consecutiveFailures++;
     console.warn('ESPN fetch failed', e);
     if (consecutiveFailures >= 3) setErrorBanner(true);
   }
+}
+
+async function fetchMatchScorers(m) {
+  const eventId = ESPN_EVENT_IDS[m.id];
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${eventId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    const home = [], away = [];
+    for (const play of (data.scoringPlays || [])) {
+      const teamName = mapEspnName(play.team?.displayName || '');
+      const side = teamName === m.home ? home : teamName === m.away ? away : null;
+      if (!side) continue;
+      const raw  = play.athlete?.shortName || play.athlete?.displayName || '';
+      const name = raw.split(' ').pop(); // last name / surname
+      const min  = play.clock?.displayValue || '';
+      side.push({ name, min });
+    }
+    SCORERS[m.id] = { home, away };
+    if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
+  } catch (e) {
+    console.warn('Scorer fetch failed', m.id, e);
+  }
+}
+
+function formatScorerSide(list) {
+  if (!list?.length) return '';
+  const grouped = {};
+  for (const { name, min } of list) {
+    if (!grouped[name]) grouped[name] = [];
+    grouped[name].push(min);
+  }
+  return Object.entries(grouped)
+    .map(([name, mins]) => `${name} ${mins.join(', ')}`)
+    .join('  ·  ');
 }
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -654,6 +705,9 @@ function renderMatchList() {
     const isDone = matchStatus(m) === 'completed';
     const clock = CLOCKS[m.id] || '';
     const breakLabel = isLive ? liveBreakLabel(clock) : null;
+    const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
+    const homeScorers = formatScorerSide(scorerData?.home);
+    const awayScorers = formatScorerSide(scorerData?.away);
     return `
       <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
         <div class="card-top">
@@ -672,6 +726,11 @@ function renderMatchList() {
             <span class="ct-flag">${teamFlag(m.away)}</span>
           </div>
         </div>
+        ${(homeScorers || awayScorers) ? `
+        <div class="card-scorers">
+          <span class="card-scorers-home">${homeScorers}</span>
+          <span class="card-scorers-away">${awayScorers}</span>
+        </div>` : ''}
         <div class="card-bottom">
           <span class="card-venue">${m.venue}, ${m.city}</span>
           <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
