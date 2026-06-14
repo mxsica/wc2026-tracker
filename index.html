@@ -448,6 +448,7 @@ async function fetchLiveData() {
         RESULTS[match.id]      = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         CLOCKS[match.id]       = comp.status.type.shortDetail || null;
         STATUS_NAMES[match.id] = (comp.status.type.name || '') + ' ' + (comp.status.type.description || '');
+        console.log('[live]', match.home, 'vs', match.away, '| shortDetail:', comp.status.type.shortDetail, '| name:', comp.status.type.name);
         parseScorersFromComp(match, comp, homeC, awayC);
       } else if (state === 'post') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
@@ -617,15 +618,16 @@ function countdownText(m) {
     const clock = CLOCKS[m.id]; // shortDetail e.g. "45'", "HT", "90'+3'"
     let display;
     if (clock) {
-      const stoppage = clock.match(/^(\d+)'\+(\d+)'$/);
+      // Flexible apostrophe: ESPN may use ', ′ or ' variants
+      const stoppage = clock.match(/^(\d+)['’′]?\s*\+\s*(\d+)['’′]?$/);
       if (stoppage) {
-        const base     = parseInt(stoppage[1]);
+        const base      = parseInt(stoppage[1]);
         const announced = parseInt(stoppage[2]);
-        const wallMin  = Math.floor((now - start) / 60000);
-        // Subtract ~15 min halftime for 2nd-half stoppage, ~30 for ET
-        const offset   = base >= 105 ? 30 : base >= 90 ? 15 : 0;
-        const running  = Math.max(base + 1, wallMin - offset);
-        display = `${running}' (+${announced})`;
+        const wallMin   = Math.floor((now - start) / 60000);
+        // Subtract ~15 min halftime for 2nd-half stoppage, ~30 for ET periods
+        const offset    = base >= 105 ? 30 : base >= 90 ? 15 : 0;
+        const running   = Math.max(base + 1, wallMin - offset);
+        display = `${running} (+${announced})`;
       } else {
         display = clock;
       }
