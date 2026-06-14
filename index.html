@@ -100,6 +100,8 @@
   .card-group:hover { color: var(--text2); }
   .card-time { font-size: 13px; color: var(--text3); }
   .card-time.live { color: var(--live); font-weight: 600; }
+  .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--live); margin-right: 5px; vertical-align: middle; animation: live-pulse 1.2s ease-in-out infinite; }
+  @keyframes live-pulse { 0%,100% { opacity:1; transform:scale(1); } 50% { opacity:0.35; transform:scale(0.65); } }
   .card-break { font-size: 11px; color: #38bdf8; background: rgba(56,189,248,0.12); border-radius: 4px; padding: 3px 8px; margin-bottom: 8px; text-align: center; }
   .card-teams { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
   .ct-home { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; }
@@ -768,7 +770,7 @@ function renderMatchList() {
       <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
         <div class="card-top">
           <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
-          <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? text : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
+          <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
         </div>
         ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
         <div class="card-teams">
