@@ -360,6 +360,7 @@ const CLOCKS         = {}; // matchId → ESPN displayClock string for live game
 const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fetches)
 const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
 const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
+const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -444,8 +445,9 @@ async function fetchLiveData() {
         if (!isNaN(d)) match.kickoff = d;
       }
       if (state === 'in') {
-        RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
-        CLOCKS[match.id]  = comp.status.type.shortDetail || null;
+        RESULTS[match.id]      = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
+        CLOCKS[match.id]       = comp.status.type.shortDetail || null;
+        STATUS_NAMES[match.id] = (comp.status.type.name || '') + ' ' + (comp.status.type.description || '');
         parseScorersFromComp(match, comp, homeC, awayC);
       } else if (state === 'post') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
@@ -770,12 +772,13 @@ function renderMatchList() {
     return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(d);
   }
 
-  function liveBreakLabel(clock) {
-    if (!clock) return null;
-    if (/water\s*break|cooling\s*break/i.test(clock)) return '💧 Water Break';
-    if (/^HT$|half.?time/i.test(clock))               return '⏸ Half Time';
-    if (/ET\s*HT|extra.?time.?half/i.test(clock))     return '⏸ Extra Time HT';
-    if (/penalt/i.test(clock))                         return '🎯 Penalty Shootout';
+  function liveBreakLabel(clock, statusName) {
+    const hay = (clock || '') + ' ' + (statusName || '');
+    if (!hay.trim()) return null;
+    if (/water|cooling|hydration|drink|BREAK/i.test(hay)) return '💧 Water Break';
+    if (/^HT\b|half.?time|HALFTIME/i.test(hay))           return '⏸ Half Time';
+    if (/ET\s*HT|extra.?time.?half/i.test(hay))           return '⏸ Extra Time HT';
+    if (/penalt/i.test(hay))                               return '🎯 Penalty Shootout';
     return null;
   }
 
@@ -785,7 +788,7 @@ function renderMatchList() {
     const result = RESULTS[m.id];
     const isDone = matchStatus(m) === 'completed';
     const clock = CLOCKS[m.id] || '';
-    const breakLabel = isLive ? liveBreakLabel(clock) : null;
+    const breakLabel = isLive ? liveBreakLabel(clock, STATUS_NAMES[m.id]) : null;
     const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
     const homeScorers = formatScorerSide(scorerData?.home);
     const awayScorers = formatScorerSide(scorerData?.away);
