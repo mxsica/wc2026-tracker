@@ -613,7 +613,23 @@ function countdownText(m) {
   // Use ESPN state as authoritative source when available
   if (espnState === 'in') {
     const clock = CLOCKS[m.id]; // shortDetail e.g. "45'", "HT", "90'+3'"
-    const display = clock || `${Math.floor((now - start) / 60000)}'`;
+    let display;
+    if (clock) {
+      const stoppage = clock.match(/^(\d+)'\+(\d+)'$/);
+      if (stoppage) {
+        const base     = parseInt(stoppage[1]);
+        const announced = parseInt(stoppage[2]);
+        const wallMin  = Math.floor((now - start) / 60000);
+        // Subtract ~15 min halftime for 2nd-half stoppage, ~30 for ET
+        const offset   = base >= 105 ? 30 : base >= 90 ? 15 : 0;
+        const running  = Math.max(base + 1, wallMin - offset);
+        display = `${running}' (+${announced})`;
+      } else {
+        display = clock;
+      }
+    } else {
+      display = `${Math.floor((now - start) / 60000)}'`;
+    }
     return { text: `LIVE · ${display}`, cls: 'live' };
   }
   if (espnState === 'post') return { text: 'Full time', cls: 'done' };
