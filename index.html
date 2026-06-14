@@ -400,10 +400,12 @@ function setErrorBanner(show) {
 }
 
 function checkPolling() {
-  const anyLive = MATCHES.some(m => ESPN_STATES[m.id] === 'in');
+  // Use matchStatus so time-based live games also trigger polling
+  const anyLive = MATCHES.some(m => matchStatus(m) === 'live');
   setLiveDot(anyLive);
   if (anyLive && !pollHandle) {
     pollHandle = setInterval(fetchLiveData, 30000);
+    fetchLiveData(); // immediate fetch when a game just went live
   } else if (!anyLive && pollHandle) {
     clearInterval(pollHandle);
     pollHandle = null;
@@ -778,27 +780,39 @@ function renderMatchList() {
 }
 
 // ─── LIVE TIMER ──────────────────────────────────────────────────────────────
+let _tick = 0;
 function tickCountdowns() {
+  let needsRender = false;
   document.querySelectorAll('.card-cd[data-id]').forEach(el => {
-    const m = MATCHES.find(x => x.id === el.dataset.id);
+    const id = el.dataset.id;
+    if (!id) return;
+    const m = MATCHES.find(x => x.id === id);
     if (!m) return;
     const { text, cls } = countdownText(m);
     const isLive = cls === 'live';
     el.textContent = isLive ? '' : text;
     el.className = 'card-cd' + (cls ? ' ' + cls : '');
-    // update the top-right time chip for upcoming games only;
-    // live game clock updates via renderMatchList on each 30s ESPN fetch
+    // Update time chip for non-live games; for live games the chip updates
+    // via renderMatchList on each ESPN fetch. If a card transitions from
+    // live → done, schedule a full re-render to clear it from the view.
     if (!isLive) {
       const card = el.closest('.match-card');
       if (card) {
         const timeEl = card.querySelector('.card-time');
         if (timeEl) {
-          timeEl.textContent = fmtTime.format(m.kickoff);
-          timeEl.className = 'card-time';
+          if (timeEl.classList.contains('live')) {
+            needsRender = true; // game just ended — re-render to remove/update card
+          } else {
+            timeEl.textContent = fmtTime.format(m.kickoff);
+            timeEl.className = 'card-time';
+          }
         }
       }
     }
   });
+  if (needsRender) { renderMatchList(); return; }
+  // Check every 30s whether a new game has gone live (starts polling if so)
+  if (++_tick % 30 === 0) checkPolling();
   document.querySelectorAll('.fx-cd[data-id]').forEach(el => {
     const m = MATCHES.find(x => x.id === el.dataset.id);
     if (!m) return;
