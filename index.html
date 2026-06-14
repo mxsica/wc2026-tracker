@@ -434,9 +434,11 @@ async function fetchLiveData() {
       if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         CLOCKS[match.id]  = comp.status.type.shortDetail || null;
+        parseScorersFromComp(match, comp, homeC, awayC);
       } else if (state === 'post') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         delete CLOCKS[match.id];
+        parseScorersFromComp(match, comp, homeC, awayC);
       } else {
         delete RESULTS[match.id];
         delete CLOCKS[match.id];
@@ -448,11 +450,13 @@ async function fetchLiveData() {
     if (currentTab === 'brackets') renderBrackets();
     checkPolling();
 
-    // Fetch scorers for live + not-yet-cached completed matches, then re-render
+    // Fallback: for any live/completed match still missing scorer data,
+    // fetch the per-match summary endpoint (some games omit inline details).
     const scorerTargets = MATCHES.filter(m => {
       const s = ESPN_STATES[m.id];
-      return (s === 'in') || (s === 'post' && !SCORER_DONE.has(m.id));
-    }).filter(m => ESPN_EVENT_IDS[m.id]);
+      const need = (s === 'in') || (s === 'post' && !SCORER_DONE.has(m.id));
+      return need && ESPN_EVENT_IDS[m.id] && !SCORERS[m.id];
+    });
     if (scorerTargets.length) {
       await Promise.all(scorerTargets.map(fetchMatchScorers));
       renderMatchList();
@@ -461,6 +465,33 @@ async function fetchLiveData() {
     consecutiveFailures++;
     console.warn('ESPN fetch failed', e);
     if (consecutiveFailures >= 3) setErrorBanner(true);
+  }
+}
+
+// Parse scorers from the scoreboard competition object (inline details).
+// This uses data we already fetch successfully — no extra CORS-bound request.
+function parseScorersFromComp(m, comp, homeC, awayC) {
+  const details = comp.details;
+  if (!Array.isArray(details) || !details.length) return; // leave for summary fallback
+  const homeId = homeC.team?.id;
+  const awayId = awayC.team?.id;
+  const home = [], away = [];
+  for (const d of details) {
+    if (!d.scoringPlay) continue;
+    const tid = d.team?.id;
+    const side = tid === homeId ? home : tid === awayId ? away : null;
+    if (!side) continue;
+    const ath  = (d.athletesInvolved && d.athletesInvolved[0]) || null;
+    const raw  = ath?.shortName || ath?.displayName || '';
+    const name = raw.split(' ').pop();
+    if (!name) continue;
+    const rawMin = d.clock?.displayValue || '';
+    const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
+    side.push({ name, min });
+  }
+  if (home.length || away.length) {
+    SCORERS[m.id] = { home, away };
+    if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
   }
 }
 
