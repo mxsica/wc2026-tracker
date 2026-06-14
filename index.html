@@ -56,13 +56,6 @@
   .header-top { display: flex; align-items: center; justify-content: space-between; padding-bottom: 12px; }
   .header-title { font-size: 20px; font-weight: 700; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
   .header-title span { color: var(--text3); font-weight: 400; font-size: 14px; margin-left: 6px; }
-  .live-dot { display: none; width: 8px; height: 8px; border-radius: 50%; background: #22c55e; flex-shrink: 0;
-    box-shadow: 0 0 0 0 rgba(34,197,94,0.4); animation: pulse-dot 1.5s ease-out infinite; }
-  @keyframes pulse-dot {
-    0%   { box-shadow: 0 0 0 0 rgba(34,197,94,0.5); }
-    70%  { box-shadow: 0 0 0 6px rgba(34,197,94,0); }
-    100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
-  }
   .error-banner { display: none; background: rgba(245,158,11,0.12); color: #f59e0b; font-size: 12px;
     text-align: center; padding: 6px 16px; border-bottom: 1px solid rgba(245,158,11,0.2); }
 
@@ -177,7 +170,7 @@
 <div id="main-view">
   <div class="header">
     <div class="header-top">
-      <div class="header-title">⚽ WC 2026<span id="live-dot" class="live-dot"></span></div>
+      <div class="header-title">⚽ WC 2026</div>
       <div id="last-updated" class="last-updated"></div>
     </div>
     <div id="error-banner" class="error-banner">Having trouble connecting — retrying</div>
@@ -394,10 +387,7 @@ function recomputeStandings() {
 let pollHandle          = null;
 let consecutiveFailures = 0;
 
-function setLiveDot(active) {
-  const el = document.getElementById('live-dot');
-  if (el) el.style.display = active ? 'inline-block' : 'none';
-}
+function setLiveDot() {}
 
 function setErrorBanner(show) {
   const el = document.getElementById('error-banner');
