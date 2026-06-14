@@ -666,7 +666,7 @@ function renderMatchList() {
             <span class="ct-flag">${teamFlag(m.home)}</span>
             <span class="ct-name">${m.home}</span>
           </div>
-          <span class="ct-vs">${(isDone || isLive) && result ? `${result.hs} – ${result.as}` : isLive ? '–' : 'vs'}</span>
+          <span class="ct-vs">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
           <div class="ct-away">
             <span class="ct-name">${m.away}</span>
             <span class="ct-flag">${teamFlag(m.away)}</span>
