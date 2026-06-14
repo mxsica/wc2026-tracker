@@ -497,6 +497,9 @@ function parseScorersFromComp(m, comp, homeC, awayC) {
   }
   if (home.length || away.length) {
     SCORERS[m.id] = { home, away };
+    // Details update on ESPN before the aggregate score fields — sync score forward
+    const cur = RESULTS[m.id] || { hs: 0, as: 0 };
+    RESULTS[m.id] = { hs: Math.max(cur.hs, home.length), as: Math.max(cur.as, away.length) };
     if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
   }
 }
