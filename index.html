@@ -471,14 +471,21 @@ async function fetchMatchScorers(m) {
     if (!res.ok) return;
     const data = await res.json();
     const home = [], away = [];
+    if (data.scoringPlays?.length) console.log('[scorers] raw play sample', data.scoringPlays[0]);
     for (const play of (data.scoringPlays || [])) {
+      // Team matching
       const teamName = mapEspnName(play.team?.displayName || '');
       const side = teamName === m.home ? home : teamName === m.away ? away : null;
       if (!side) continue;
-      const raw  = play.athlete?.shortName || play.athlete?.displayName || '';
-      const name = raw.split(' ').pop(); // last name / surname
-      const min  = play.clock?.displayValue || '';
-      side.push({ name, min });
+      // Athlete: ESPN places scorer in participants array; fall back to play.athlete
+      const scorer     = play.participants?.find(p => p.type === 'scorer') || play.participants?.[0];
+      const athleteObj = scorer?.athlete ?? play.athlete;
+      const raw  = athleteObj?.shortName || athleteObj?.displayName || '';
+      const name = raw.split(' ').pop();
+      // Clock: may be "23'" already or "23:00" MM:SS — normalise to minute string
+      const rawMin = play.clock?.displayValue || '';
+      const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
+      if (name) side.push({ name, min });
     }
     SCORERS[m.id] = { home, away };
     if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
