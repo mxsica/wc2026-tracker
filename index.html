@@ -109,9 +109,10 @@
   .ct-name { font-size: 17px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1; }
   .ct-vs { font-size: 20px; color: var(--text3); flex-shrink: 0; padding: 0 4px; line-height: 1; }
   .ct-vs.live { color: var(--live); }
+  .ct-vs.done { color: var(--text); }
   .ct-away { display: flex; align-items: center; gap: 8px; flex: 1; min-width: 0; justify-content: flex-end; }
   .ct-away .ct-name { text-align: right; }
-  .card-scorers { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; margin-bottom: 10px; font-size: 12px; color: var(--text3); line-height: 1.6; }
+  .card-scorers { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; margin-bottom: 10px; font-size: 12px; color: var(--text); line-height: 1.6; }
   .card-scorers-home { max-width: 50%; }
   .card-scorers-away { text-align: right; max-width: 50%; }
   .card-bottom { display: flex; justify-content: space-between; align-items: center; }
@@ -783,7 +784,7 @@ function renderMatchList() {
             <span class="ct-flag">${teamFlag(m.home)}</span>
             <span class="ct-name">${m.home}</span>
           </div>
-          <span class="ct-vs${isLive ? ' live' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
+          <span class="ct-vs${isLive ? ' live' : isDone ? ' done' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
           <div class="ct-away">
             <span class="ct-name">${m.away}</span>
             <span class="ct-flag">${teamFlag(m.away)}</span>
