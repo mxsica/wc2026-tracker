@@ -431,6 +431,12 @@ async function fetchLiveData() {
       if (!match) continue;
       ESPN_EVENT_IDS[match.id] = event.id;
       ESPN_STATES[match.id] = state;
+      // Sync kickoff to ESPN's authoritative date so all times stay correct
+      const espnDate = event.date || comp.date;
+      if (espnDate) {
+        const d = new Date(espnDate);
+        if (!isNaN(d)) match.kickoff = d;
+      }
       if (state === 'in') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         CLOCKS[match.id]  = comp.status.type.shortDetail || null;
