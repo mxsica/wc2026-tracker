@@ -685,6 +685,9 @@ function renderTeamChips() {
       const name = el.dataset.team;
       if (currentTeamFilter === name) {
         currentTeamFilter = null;
+        currentGroup = 'UPCOMING';
+        groupFixtureFilter = 'upcoming';
+        renderChips();
       } else {
         currentTeamFilter = name;
         currentGroup = 'ALL'; // clear group selection
