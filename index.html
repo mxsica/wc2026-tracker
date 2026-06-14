@@ -466,25 +466,44 @@ async function fetchLiveData() {
 
 async function fetchMatchScorers(m) {
   const eventId = ESPN_EVENT_IDS[m.id];
+  if (!eventId) return;
   try {
     const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${eventId}`);
     if (!res.ok) return;
     const data = await res.json();
+
+    // Resolve team IDs from the summary header so we match by ID, not name
+    const comp       = data.header?.competitions?.[0];
+    const homeTeamId = comp?.competitors?.find(c => c.homeAway === 'home')?.team?.id;
+    const awayTeamId = comp?.competitors?.find(c => c.homeAway === 'away')?.team?.id;
+
+    // Some ESPN endpoints use 'scoringPlays'; others put scored plays inside 'plays'
+    const plays = data.scoringPlays?.length
+      ? data.scoringPlays
+      : (data.plays?.filter(p => p.scoringPlay) ?? []);
+
+    if (plays.length) console.log('[scorers] sample play', m.id, plays[0]);
+
     const home = [], away = [];
-    if (data.scoringPlays?.length) console.log('[scorers] raw play sample', data.scoringPlays[0]);
-    for (const play of (data.scoringPlays || [])) {
-      // Team matching
-      const teamName = mapEspnName(play.team?.displayName || '');
-      const side = teamName === m.home ? home : teamName === m.away ? away : null;
+    for (const play of plays) {
+      const tid  = play.team?.id;
+      const tnam = mapEspnName(play.team?.displayName || '');
+      // Match by ID when available, fall back to display-name mapping
+      const isHome = (homeTeamId && tid === homeTeamId) || (!homeTeamId && tnam === m.home);
+      const isAway = (awayTeamId && tid === awayTeamId) || (!awayTeamId && tnam === m.away);
+      const side = isHome ? home : isAway ? away : null;
       if (!side) continue;
-      // Athlete: ESPN places scorer in participants array; fall back to play.athlete
+
+      // Athlete may be in participants array or directly on the play
       const scorer     = play.participants?.find(p => p.type === 'scorer') || play.participants?.[0];
       const athleteObj = scorer?.athlete ?? play.athlete;
       const raw  = athleteObj?.shortName || athleteObj?.displayName || '';
       const name = raw.split(' ').pop();
-      // Clock: may be "23'" already or "23:00" MM:SS — normalise to minute string
+
+      // Normalise clock: "23:00" → "23'"; "23'" stays as-is
       const rawMin = play.clock?.displayValue || '';
       const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
+
       if (name) side.push({ name, min });
     }
     SCORERS[m.id] = { home, away };
