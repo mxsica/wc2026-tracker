@@ -475,7 +475,7 @@ async function fetchLiveData() {
         RESULTS[match.id]      = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         CLOCKS[match.id]       = comp.status.type.shortDetail || null;
         STATUS_NAMES[match.id] = (comp.status.type.name || '') + ' ' + (comp.status.type.description || '');
-        console.log('[live]', match.home, 'vs', match.away, '| shortDetail:', comp.status.type.shortDetail, '| name:', comp.status.type.name);
+        console.log('[live]', match.home, 'vs', match.away, '| shortDetail:', comp.status.type.shortDetail, '| name:', comp.status.type.name, '| desc:', comp.status.type.description, '| detail:', comp.status.type.detail, '| statusFull:', JSON.stringify(comp.status.type));
         parseScorersFromComp(match, comp, homeC, awayC);
       } else if (state === 'post') {
         RESULTS[match.id] = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
@@ -679,11 +679,8 @@ function countdownText(m) {
     return { text, cls };
   }
 
-  // Time-based fallback when ESPN data not yet loaded
-  const end = start + 110 * 60 * 1000;
-  if (now >= end) return { text: 'Full time', cls: 'done' };
-  const elapsed = Math.floor((now - start) / 60000);
-  return { text: `LIVE · ${elapsed}'`, cls: 'live' };
+  // ESPN not yet confirmed — never guess live
+  return { text: 'Waiting for kick-off', cls: 'soon' };
 }
 
 function filterMatches() {
@@ -843,7 +840,7 @@ function renderMatchList() {
   function liveBreakLabel(clock, statusName) {
     const hay = (clock || '') + ' ' + (statusName || '');
     if (!hay.trim()) return null;
-    if (/water|cooling|hydration|drink|BREAK/i.test(hay)) return '💧 Water Break';
+    if (/water|cooling|hydration|drink|break/i.test(hay)) return '💧 Water Break';
     if (/^HT\b|half.?time|HALFTIME/i.test(hay))           return '⏸ Half Time';
     if (/ET\s*HT|extra.?time.?half/i.test(hay))           return '⏸ Extra Time HT';
     if (/penalt/i.test(hay))                               return '🎯 Penalty Shootout';
