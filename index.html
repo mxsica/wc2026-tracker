@@ -179,8 +179,7 @@
   .progress-bar-track { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
   .progress-bar-fill { height: 100%; background: var(--soon); border-radius: 2px; transition: width 0.3s; }
   .ct-name-tbd { font-size: 17px; font-weight: 700; color: var(--text3); }
-  .ct-flags-stack { font-size: 13px; letter-spacing: -1px; flex-shrink: 0; line-height: 1; }
-  .grp-link { cursor: pointer; }
+.grp-link { cursor: pointer; }
 
   /* STADIUMS VIEW */
   .stadium-list { display: flex; flex-direction: column; gap: 0; }
@@ -1175,13 +1174,10 @@ function slotHtml(team, label, side, candidates) {
       ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
       : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
   }
-  // R16+ TBD slots: show stacked projected flags (max 4)
+  // R16+ TBD slots: show full-size flags, no label
   if (candidates && candidates.length > 0) {
     const flags = candidates.slice(0, 4).map(n => TEAMS[n]?.flag || '').filter(Boolean).join('');
-    const stackHtml = `<span class="ct-flags-stack">${flags}</span>`;
-    return side === 'home'
-      ? `${stackHtml}<span class="ct-name-tbd">${label}</span>`
-      : `<span class="ct-name-tbd">${label}</span>${stackHtml}`;
+    return `<span class="ct-flag">${flags}</span>`;
   }
   // R32 slots: single projected flag + label
   const grp = groupFromLabel(label);
