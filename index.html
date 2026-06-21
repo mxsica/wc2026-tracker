@@ -1174,9 +1174,10 @@ function slotHtml(team, label, side, candidates) {
       ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
       : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
   }
-  // R16+ TBD slots: show full-size flags, no label
+  // R16+ TBD slots: show full-size flags, no label; Final (16 candidates) → white flag
   if (candidates && candidates.length > 0) {
-    const flags = candidates.slice(0, 4).map(n => TEAMS[n]?.flag || '').filter(Boolean).join('');
+    if (candidates.length > 8) return `<span class="ct-flag">\u{1F3F3}️</span>`;
+    const flags = candidates.map(n => TEAMS[n]?.flag || '').filter(Boolean).join('');
     return `<span class="ct-flag">${flags}</span>`;
   }
   // R32 slots: single projected flag + label
