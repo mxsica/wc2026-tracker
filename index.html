@@ -888,8 +888,8 @@ function cardHtml(m) {
       </div>` : ''}
       <div class="card-bottom">
         <span class="card-venue">${m.venue}, ${m.city}</span>
-        ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
         <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
+        ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
       </div>
     </div>`;
 }
