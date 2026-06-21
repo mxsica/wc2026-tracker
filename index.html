@@ -106,6 +106,9 @@
   .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .card-group { font-size: 13px; color: var(--text3); cursor: pointer; }
   .card-group:hover { color: var(--text2); }
+  .card-top-right { display: flex; align-items: center; gap: 10px; }
+  .card-cal-btn { font-size: 12px; color: var(--text3); cursor: pointer; white-space: nowrap; }
+  .card-cal-btn:active { opacity: 0.6; }
   .card-time { font-size: 13px; color: var(--text); }
   .card-time.done { color: var(--text3); }
   .card-time.live { color: var(--live); font-weight: 600; }
@@ -830,6 +833,27 @@ function liveBreakLabel(clock, statusName) {
   return null;
 }
 
+function downloadICS(m) {
+  const pad = n => String(n).padStart(2, '0');
+  const fmtUTC = d => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  const end = new Date(m.kickoff.getTime() + 120 * 60 * 1000);
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WC 2026 Tracker//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmtUTC(m.kickoff)}`, `DTEND:${fmtUTC(end)}`,
+    `SUMMARY:${m.home} vs ${m.away} – Group ${m.group}`,
+    `LOCATION:${m.venue}, ${m.city}`, 'DESCRIPTION:FIFA World Cup 2026',
+    `UID:${m.id}@wc2026tracker`,
+    'END:VEVENT', 'END:VCALENDAR'
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `wc2026-${m.id}.ics`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 function cardHtml(m) {
   const { text, cls } = countdownText(m);
   const isLive = cls === 'live';
@@ -844,7 +868,10 @@ function cardHtml(m) {
     <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
       <div class="card-top">
         <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
-        <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
+        <div class="card-top-right">
+          ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
+          <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
+        </div>
       </div>
       ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
       <div class="card-teams">
@@ -946,6 +973,14 @@ function renderMatchList() {
       renderChips();
       renderTeamChips();
       renderMatchList();
+    });
+  });
+
+  list.querySelectorAll('.card-cal-btn[data-cal-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const m = MATCHES.find(x => x.id === el.dataset.calId);
+      if (m) downloadICS(m);
     });
   });
 
@@ -1369,6 +1404,14 @@ function renderStadiums() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelector('.tab[data-tab="group-phase"]').classList.add('active');
       renderChips(); renderTeamChips(); renderMatchList();
+    });
+  });
+
+  list.querySelectorAll('.card-cal-btn[data-cal-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const m = MATCHES.find(x => x.id === el.dataset.calId);
+      if (m) downloadICS(m);
     });
   });
 }
