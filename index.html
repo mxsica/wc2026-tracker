@@ -180,6 +180,20 @@
   .progress-bar-fill { height: 100%; background: var(--soon); border-radius: 2px; transition: width 0.3s; }
   .ct-name-tbd { font-size: 17px; font-weight: 700; color: var(--text3); }
   .grp-link { cursor: pointer; }
+
+  /* STADIUMS VIEW */
+  .stadium-list { display: flex; flex-direction: column; gap: 0; }
+  .stadium-item { display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 0; border-bottom: 1px solid var(--border); cursor: pointer; }
+  .stadium-item:last-child { border-bottom: none; }
+  .stadium-item-left { display: flex; flex-direction: column; gap: 2px; }
+  .stadium-item-name { font-size: 15px; font-weight: 600; color: var(--text); }
+  .stadium-item-city { font-size: 12px; color: var(--text3); }
+  .stadium-item-count { font-size: 12px; color: var(--text3); flex-shrink: 0; }
+  .stadium-detail-back { font-size: 13px; color: var(--text3); cursor: pointer; padding: 10px 0 4px; display: inline-block; }
+  .stadium-detail-back:hover { color: var(--text); }
+  .stadium-detail-title { font-size: 18px; font-weight: 700; color: var(--text); padding-bottom: 2px; }
+  .stadium-detail-city { font-size: 13px; color: var(--text3); padding-bottom: 12px; }
 </style>
 </head>
 <body>
@@ -361,6 +375,7 @@ const ESPN_NAME_MAP = {
   'Congo DR':           'DR Congo',
 };
 function mapEspnName(n) { return ESPN_NAME_MAP[n] || n; }
+
 
 // ─── LIVE STATE (overrides time-based matchStatus) ────────────────────────────
 const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
@@ -607,6 +622,8 @@ let currentGroup = 'UPCOMING';
 let bracketFilter = 'upcoming';
 let currentTeamFilter = null;
 let groupFixtureFilter = 'upcoming';
+let currentStadium = null;
+let prevState = null;
 let timerHandle = null;
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
@@ -742,6 +759,7 @@ function renderTeamChips() {
   );
 }
 
+
 function renderChips() {
   const wrap = document.getElementById('group-chips');
   wrap.style.display = 'flex';
@@ -793,6 +811,65 @@ function standingsTableHtml(g, bestThird) {
     </div>`;
 }
 
+// ─── CARD HELPERS (shared by match list and stadiums view) ──────────────────
+const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, {
+  weekday: 'long', month: 'long', day: 'numeric', timeZone: LOCAL_TZ
+});
+
+function localDateKey(d) {
+  return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(d);
+}
+
+function liveBreakLabel(clock, statusName) {
+  const hay = (clock || '') + ' ' + (statusName || '');
+  if (!hay.trim()) return null;
+  if (/water|cooling|hydration|drink|break/i.test(hay)) return '💧 Water Break';
+  if (/^HT\b|half.?time|HALFTIME/i.test(hay))           return '⏸ Half Time';
+  if (/ET\s*HT|extra.?time.?half/i.test(hay))           return '⏸ Extra Time HT';
+  if (/penalt/i.test(hay))                               return '🎯 Penalty Shootout';
+  return null;
+}
+
+function cardHtml(m) {
+  const { text, cls } = countdownText(m);
+  const isLive = cls === 'live';
+  const result = RESULTS[m.id];
+  const isDone = matchStatus(m) === 'completed';
+  const clock = CLOCKS[m.id] || '';
+  const breakLabel = isLive ? liveBreakLabel(clock, STATUS_NAMES[m.id]) : null;
+  const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
+  const homeScorers = formatScorerSide(scorerData?.home);
+  const awayScorers = formatScorerSide(scorerData?.away);
+  return `
+    <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
+      <div class="card-top">
+        <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
+        <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
+      </div>
+      ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
+      <div class="card-teams">
+        <div class="ct-home">
+          <span class="ct-flag">${teamFlag(m.home)}</span>
+          <span class="ct-name">${m.home}</span>
+        </div>
+        <span class="ct-vs${isLive ? ' live' : isDone ? ' done' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
+        <div class="ct-away">
+          <span class="ct-name">${m.away}</span>
+          <span class="ct-flag">${teamFlag(m.away)}</span>
+        </div>
+      </div>
+      ${(homeScorers || awayScorers) ? `
+      <div class="card-scorers">
+        <div class="card-scorers-home">${homeScorers}</div>
+        <div class="card-scorers-away">${awayScorers}</div>
+      </div>` : ''}
+      <div class="card-bottom">
+        <span class="card-venue">${m.venue}, ${m.city}</span>
+        <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
+      </div>
+    </div>`;
+}
+
 // ─── RENDER MATCH LIST ───────────────────────────────────────────────────────
 function renderMatchList() {
   const list = document.getElementById('match-list');
@@ -829,63 +906,7 @@ function renderMatchList() {
   const live = filtered.filter(m => matchStatus(m) === 'live');
   const rest = filtered.filter(m => matchStatus(m) !== 'live');
 
-  const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, {
-    weekday: 'long', month: 'long', day: 'numeric', timeZone: LOCAL_TZ
-  });
 
-  function localDateKey(d) {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(d);
-  }
-
-  function liveBreakLabel(clock, statusName) {
-    const hay = (clock || '') + ' ' + (statusName || '');
-    if (!hay.trim()) return null;
-    if (/water|cooling|hydration|drink|break/i.test(hay)) return '💧 Water Break';
-    if (/^HT\b|half.?time|HALFTIME/i.test(hay))           return '⏸ Half Time';
-    if (/ET\s*HT|extra.?time.?half/i.test(hay))           return '⏸ Extra Time HT';
-    if (/penalt/i.test(hay))                               return '🎯 Penalty Shootout';
-    return null;
-  }
-
-  function cardHtml(m) {
-    const { text, cls } = countdownText(m);
-    const isLive = cls === 'live';
-    const result = RESULTS[m.id];
-    const isDone = matchStatus(m) === 'completed';
-    const clock = CLOCKS[m.id] || '';
-    const breakLabel = isLive ? liveBreakLabel(clock, STATUS_NAMES[m.id]) : null;
-    const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
-    const homeScorers = formatScorerSide(scorerData?.home);
-    const awayScorers = formatScorerSide(scorerData?.away);
-    return `
-      <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
-        <div class="card-top">
-          <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
-          <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
-        </div>
-        ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
-        <div class="card-teams">
-          <div class="ct-home">
-            <span class="ct-flag">${teamFlag(m.home)}</span>
-            <span class="ct-name">${m.home}</span>
-          </div>
-          <span class="ct-vs${isLive ? ' live' : isDone ? ' done' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
-          <div class="ct-away">
-            <span class="ct-name">${m.away}</span>
-            <span class="ct-flag">${teamFlag(m.away)}</span>
-          </div>
-        </div>
-        ${(homeScorers || awayScorers) ? `
-        <div class="card-scorers">
-          <div class="card-scorers-home">${homeScorers}</div>
-          <div class="card-scorers-away">${awayScorers}</div>
-        </div>` : ''}
-        <div class="card-bottom">
-          <span class="card-venue">${m.venue}, ${m.city}</span>
-          <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
-        </div>
-      </div>`;
-  }
 
   let html = '';
 
@@ -897,8 +918,10 @@ function renderMatchList() {
       byDate[key].push(m);
     });
     const sortedKeys = Object.keys(byDate).sort();
-    if (currentGroup === 'PAST') sortedKeys.reverse();
+    const isPastView = currentGroup === 'PAST';
+    if (isPastView) sortedKeys.reverse();
     sortedKeys.forEach(key => {
+      if (isPastView) byDate[key].reverse();
       html += `<div class="date-header">${fmtDayHeader.format(new Date(key + 'T12:00:00'))}</div>`;
       byDate[key].forEach(m => { html += cardHtml(m); });
     });
@@ -907,32 +930,12 @@ function renderMatchList() {
   const activeGroup = currentTeamFilter ? TEAMS[currentTeamFilter]?.group : (['ALL','UPCOMING','PAST','ALL_GROUPS'].includes(currentGroup) ? null : currentGroup);
 
   if (activeGroup) {
-    const hasPast = rest.some(m => matchStatus(m) === 'completed');
-    const filterChips = hasPast ? `<div class="chips-wrap" id="fixture-filter-chips" style="padding:10px 0 4px">
-        <div class="chip ${groupFixtureFilter === 'upcoming' ? 'active' : ''}" data-ff="upcoming">Upcoming</div>
-        <div class="chip ${groupFixtureFilter === 'past' ? 'active' : ''}" data-ff="past">Past</div>
-      </div>` : '';
-    html = standingsTableHtml(activeGroup, computeBestThirdSet()) + filterChips + html;
+    html = standingsTableHtml(activeGroup, computeBestThirdSet()) + html;
   }
 
-  const displayMatches = activeGroup
-    ? rest.filter(m => groupFixtureFilter === 'past'
-        ? matchStatus(m) === 'completed'
-        : matchStatus(m) !== 'completed')
-    : rest;
-
-  const showLive = !activeGroup || groupFixtureFilter !== 'past';
-  renderByDate(showLive ? [...live, ...displayMatches] : displayMatches);
+  renderByDate([...live, ...rest]);
 
   list.innerHTML = html;
-
-  list.querySelectorAll('#fixture-filter-chips .chip').forEach(el => {
-    el.addEventListener('click', () => {
-      if (el.dataset.ff === groupFixtureFilter) return;
-      groupFixtureFilter = el.dataset.ff;
-      renderMatchList();
-    });
-  });
 
   list.querySelectorAll('.card-group[data-group]').forEach(el => {
     el.addEventListener('click', e => {
@@ -948,11 +951,24 @@ function renderMatchList() {
 
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
+      if (e.target.closest('.card-venue')) return;
       const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
       const relX = clickX - rect.left;
       const teamName = relX < rect.width / 2 ? card.dataset.home : card.dataset.away;
       selectTeam(teamName);
+    });
+  });
+
+  list.querySelectorAll('.card-venue').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const card = el.closest('.match-card');
+      const m = MATCHES.find(x => x.id === card?.dataset.id);
+      if (!m) return;
+      prevState = { tab: currentTab, group: currentGroup, teamFilter: currentTeamFilter };
+      currentStadium = m.venue;
+      renderStadiums();
     });
   });
 }
@@ -1069,6 +1085,83 @@ const BRACKET_ROUNDS = [
   ]},
 ];
 
+// ─── BRACKET CARD HELPERS (shared by brackets and stadium view) ──────────────
+function groupFromLabel(label) {
+  const m = label && label.match(/Group ([A-L])/);
+  return m ? m[1] : null;
+}
+
+function getProjectedTeam(label) {
+  const m = label && label.match(/^(\d+)(?:st|nd|rd|th) Group ([A-L])$/);
+  if (m) {
+    const pos = parseInt(m[1], 10);
+    const grp = m[2];
+    const standings = STANDINGS[grp];
+    if (standings && standings.length >= pos) return standings[pos - 1].name;
+    const ranked = Object.entries(TEAMS)
+      .filter(([, t]) => t.group === grp)
+      .sort((a, b) => a[1].ranking - b[1].ranking);
+    return ranked[pos - 1]?.[0] || null;
+  }
+  const m3 = label && label.match(/^3rd Best #(\d+)$/);
+  if (m3) {
+    const rank = parseInt(m3[1], 10);
+    const thirds = 'ABCDEFGHIJKL'.split('').map(grp => {
+      const st = STANDINGS[grp];
+      if (st && st.length >= 3) return { name: st[2].name, pts: st[2].pts, gd: st[2].gd, gf: st[2].gf, ranking: TEAMS[st[2].name]?.ranking || 999 };
+      const ranked = Object.entries(TEAMS)
+        .filter(([, t]) => t.group === grp)
+        .sort((a, b) => a[1].ranking - b[1].ranking);
+      const name = ranked[2]?.[0];
+      return name ? { name, pts: 0, gd: 0, gf: 0, ranking: TEAMS[name]?.ranking || 999 } : null;
+    }).filter(Boolean).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.ranking - b.ranking);
+    return thirds[rank - 1]?.name || null;
+  }
+  return null;
+}
+
+function currentLeaderFlag(label) {
+  const name = getProjectedTeam(label);
+  return (name && TEAMS[name]?.flag) || '\u{1F3F3}\uFE0F';
+}
+
+function slotHtml(team, label, side) {
+  const known = team && TEAMS[team];
+  if (known) {
+    return side === 'home'
+      ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
+      : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
+  }
+  const grp = groupFromLabel(label);
+  const projected = getProjectedTeam(label);
+  const flag = (projected && TEAMS[projected]?.flag) || '\u{1F3F3}\uFE0F';
+  const tappable = !!grp;
+  return side === 'home'
+    ? `<span class="ct-flag">${flag}</span><span class="ct-name-tbd ${tappable ? 'grp-link' : ''}" data-grp="${grp || ''}">${label}</span>`
+    : `<span class="ct-name-tbd ${tappable ? 'grp-link' : ''}" data-grp="${grp || ''}">${label}</span><span class="ct-flag">${flag}</span>`;
+}
+
+function bracketCardHtml(m) {
+  const kickoff = m.date ? new Date(m.date) : null;
+  const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
+  return `
+    <div class="match-card" data-bteam1="${m.team1 || ''}" data-bteam2="${m.team2 || ''}" data-venue="${m.venue || ''}">
+      <div class="card-top">
+        <span class="card-group">${m.round}</span>
+        <span class="card-time">${timeStr}</span>
+      </div>
+      <div class="card-teams">
+        <div class="ct-home">${slotHtml(m.team1, m.label1, 'home')}</div>
+        <span class="ct-vs">vs</span>
+        <div class="ct-away">${slotHtml(m.team2, m.label2, 'away')}</div>
+      </div>
+      <div class="card-bottom">
+        <span class="card-venue">${m.venue || 'Venue TBD'}</span>
+        <span class="card-cd">${kickoff ? 'in ' + Math.ceil((kickoff - Date.now()) / 86400000) + 'd' : ''}</span>
+      </div>
+    </div>`;
+}
+
 // ─── RENDER BRACKETS ─────────────────────────────────────────────────────────
 function renderBrackets() {
   const list = document.getElementById('match-list');
@@ -1076,81 +1169,7 @@ function renderBrackets() {
   const total = MATCHES.length;
   const pct   = Math.round((done / total) * 100);
 
-  function groupFromLabel(label) {
-    const m = label && label.match(/Group ([A-L])/);
-    return m ? m[1] : null;
-  }
 
-  function currentLeaderFlag(label) {
-    const m = label && label.match(/^(\d+)(?:st|nd|rd|th) Group ([A-L])$/);
-    if (m) {
-      const pos = parseInt(m[1], 10);
-      const grp = m[2];
-      const standings = STANDINGS[grp];
-      let name;
-      if (standings && standings.length >= pos) {
-        name = standings[pos - 1].name;
-      } else {
-        const ranked = Object.entries(TEAMS)
-          .filter(([, t]) => t.group === grp)
-          .sort((a, b) => a[1].ranking - b[1].ranking);
-        name = ranked[pos - 1]?.[0];
-      }
-      return (name && TEAMS[name]?.flag) || '🏳️';
-    }
-    const m3 = label && label.match(/^3rd Best #(\d+)$/);
-    if (m3) {
-      const rank = parseInt(m3[1], 10);
-      const thirds = 'ABCDEFGHIJKL'.split('').map(grp => {
-        const st = STANDINGS[grp];
-        if (st && st.length >= 3) return { name: st[2].name, pts: st[2].pts, gd: st[2].gd, gf: st[2].gf, ranking: TEAMS[st[2].name]?.ranking || 999 };
-        const ranked = Object.entries(TEAMS)
-          .filter(([, t]) => t.group === grp)
-          .sort((a, b) => a[1].ranking - b[1].ranking);
-        const name = ranked[2]?.[0];
-        return name ? { name, pts: 0, gd: 0, gf: 0, ranking: TEAMS[name]?.ranking || 999 } : null;
-      }).filter(Boolean).sort((a, b) => b.pts - a.pts || b.gd - a.gd || b.gf - a.gf || a.ranking - b.ranking);
-      const name = thirds[rank - 1]?.name;
-      return (name && TEAMS[name]?.flag) || '🏳️';
-    }
-    return '🏳️';
-  }
-
-  function slotHtml(team, label, side) {
-    const known = team && TEAMS[team];
-    const grp = !known && groupFromLabel(label);
-    if (known) {
-      return side === 'home'
-        ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
-        : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
-    }
-    const flag = currentLeaderFlag(label);
-    const tappable = !!grp;
-    return side === 'home'
-      ? `<span class="ct-flag">${flag}</span><span class="ct-name-tbd ${tappable ? 'grp-link' : ''}" data-grp="${grp || ''}">${label}</span>`
-      : `<span class="ct-name-tbd ${tappable ? 'grp-link' : ''}" data-grp="${grp || ''}">${label}</span><span class="ct-flag">${flag}</span>`;
-  }
-
-  function bracketCardHtml(m) {
-    const kickoff = m.date ? new Date(m.date) : null;
-    const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
-    return `
-      <div class="match-card" data-bteam1="${m.team1 || ''}" data-bteam2="${m.team2 || ''}">
-        <div class="card-top">
-          <span class="card-group">${m.round}</span>
-          <span class="card-time">${timeStr}</span>
-        </div>
-        <div class="card-teams">
-          <div class="ct-home">${slotHtml(m.team1, m.label1, 'home')}</div>
-          <span class="ct-vs">vs</span>
-          <div class="ct-away">${slotHtml(m.team2, m.label2, 'away')}</div>
-        </div>
-        <div class="card-bottom">
-          <span class="card-venue">${m.venue || 'Venue TBD'}</span>
-          <span class="card-cd">${kickoff ? 'in ' + Math.ceil((kickoff - Date.now()) / 86400000) + 'd' : ''}</span>
-        </div>
-      </div>`;
-  }
 
   let html = '';
 
@@ -1196,10 +1215,107 @@ function renderBrackets() {
 
   list.querySelectorAll('.match-card[data-bteam1]').forEach(card => {
     card.addEventListener('click', e => {
+      if (e.target.closest('.card-venue')) return;
       const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
       const t = clickX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2;
       if (t && TEAMS[t]) selectTeam(t);
+    });
+  });
+
+  list.querySelectorAll('.card-venue').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const venue = el.closest('.match-card')?.dataset.venue;
+      if (!venue) return;
+      // Bracket venues include city ("SoFi Stadium, Inglewood, CA") — strip to just name
+      const venueName = venue.split(',')[0].trim();
+      if (!venueName) return;
+      prevState = { tab: currentTab, group: currentGroup, teamFilter: currentTeamFilter };
+      currentStadium = venueName;
+      renderStadiums();
+    });
+  });
+}
+
+// ─── STADIUMS VIEW ───────────────────────────────────────────────────────────
+function renderStadiums() {
+  document.getElementById('group-chips').style.display = 'none';
+  document.getElementById('team-chips').style.display = 'none';
+  const list = document.getElementById('match-list');
+
+  const stMatches = MATCHES.filter(m => m.venue === currentStadium);
+  const city = stMatches[0]?.city || '';
+
+  const stBracket = BRACKET_ROUNDS.flatMap(({ label, matches }) =>
+    matches.map(m => ({ ...m, round: label }))
+  ).filter(m => m.venue && m.venue.split(',')[0].trim() === currentStadium);
+
+  const allEntries = [
+    ...stMatches.map(m => ({ type: 'group', m, ts: m.kickoff.getTime() })),
+    ...stBracket.map(m => ({ type: 'bracket', m, ts: m.date ? new Date(m.date).getTime() : Infinity })),
+  ].sort((a, b) => a.ts - b.ts);
+
+  const byDate = {};
+  allEntries.forEach(({ type, m, ts }) => {
+    const key = ts === Infinity ? 'tbd' : localDateKey(type === 'group' ? m.kickoff : new Date(m.date));
+    if (!byDate[key]) byDate[key] = [];
+    byDate[key].push({ type, m });
+  });
+
+  let html = `
+    <div class="stadium-detail-back" id="stadium-back">← Back</div>
+    <div class="stadium-detail-title">${currentStadium}</div>
+    <div class="stadium-detail-city">${city}</div>`;
+
+  Object.keys(byDate).sort().forEach(key => {
+    const label = key === 'tbd' ? 'Date TBD' : fmtDayHeader.format(new Date(key + 'T12:00:00'));
+    html += `<div class="date-header">${label}</div>`;
+    byDate[key].forEach(({ type, m }) => {
+      html += type === 'group' ? cardHtml(m) : bracketCardHtml(m);
+    });
+  });
+
+  list.innerHTML = html;
+  list.scrollIntoView({ behavior: 'instant', block: 'start' });
+
+  document.getElementById('stadium-back').addEventListener('click', () => {
+    currentStadium = null;
+    const st = prevState || { tab: 'group-phase', group: 'UPCOMING', teamFilter: null };
+    prevState = null;
+    currentTab = st.tab;
+    currentGroup = st.group;
+    currentTeamFilter = st.teamFilter;
+    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.tab[data-tab="${currentTab}"]`).classList.add('active');
+    if (currentTab === 'brackets') {
+      renderBracketChips(); renderBrackets();
+    } else {
+      renderChips(); renderTeamChips(); renderMatchList();
+    }
+  });
+
+  list.querySelectorAll('.match-card').forEach(card => {
+    card.addEventListener('click', e => {
+      if (e.target.closest('.card-venue')) return;
+      const clickX = e.clientX;
+      const rect = card.getBoundingClientRect();
+      const teamName = clickX < rect.left + rect.width / 2 ? card.dataset.home : card.dataset.away;
+      selectTeam(teamName);
+    });
+  });
+
+  list.querySelectorAll('.card-group[data-group]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      currentStadium = null;
+      prevState = null;
+      currentGroup = el.dataset.group;
+      currentTeamFilter = null;
+      currentTab = 'group-phase';
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.tab[data-tab="group-phase"]').classList.add('active');
+      renderChips(); renderTeamChips(); renderMatchList();
     });
   });
 }
@@ -1210,7 +1326,10 @@ document.querySelectorAll('.tab').forEach(el => {
     document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
     el.classList.add('active');
     currentTab = el.dataset.tab;
+    currentStadium = null;
+    prevState = null;
     if (currentTab === 'brackets') {
+      document.getElementById('group-chips').style.display = 'none';
       document.getElementById('team-chips').style.display = 'none';
       renderBracketChips(); renderBrackets();
     } else {
@@ -1222,8 +1341,8 @@ document.querySelectorAll('.tab').forEach(el => {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 renderChips();
-renderTeamChips();
-renderMatchList();
+  renderTeamChips();
+  renderMatchList();
 setInterval(tickCountdowns, 1000);
 fetchLiveData();
 </script>
