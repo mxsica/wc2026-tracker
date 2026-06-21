@@ -106,8 +106,7 @@
   .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
   .card-group { font-size: 13px; color: var(--text3); cursor: pointer; }
   .card-group:hover { color: var(--text2); }
-  .card-top-right { display: flex; align-items: center; gap: 10px; }
-  .card-cal-btn { font-size: 12px; color: var(--text3); cursor: pointer; white-space: nowrap; }
+.card-cal-btn { font-size: 12px; color: var(--text3); cursor: pointer; white-space: nowrap; }
   .card-cal-btn:active { opacity: 0.6; }
   .card-time { font-size: 13px; color: var(--text); }
   .card-time.done { color: var(--text3); }
@@ -868,10 +867,7 @@ function cardHtml(m) {
     <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
       <div class="card-top">
         <span class="card-group" data-group="${m.group}">Group ${m.group}</span>
-        <div class="card-top-right">
-          ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
-          <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
-        </div>
+        <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${text}` : isDone ? 'FT' : fmtTime.format(m.kickoff)}</span>
       </div>
       ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
       <div class="card-teams">
@@ -892,6 +888,7 @@ function cardHtml(m) {
       </div>` : ''}
       <div class="card-bottom">
         <span class="card-venue">${m.venue}, ${m.city}</span>
+        ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
         <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
       </div>
     </div>`;
