@@ -179,6 +179,7 @@
   .progress-bar-track { height: 4px; background: var(--surface2); border-radius: 2px; overflow: hidden; }
   .progress-bar-fill { height: 100%; background: var(--soon); border-radius: 2px; transition: width 0.3s; }
   .ct-name-tbd { font-size: 17px; font-weight: 700; color: var(--text3); }
+  .ct-flags-stack { font-size: 13px; letter-spacing: -1px; flex-shrink: 0; line-height: 1; }
   .grp-link { cursor: pointer; }
 
   /* STADIUMS VIEW */
@@ -1085,6 +1086,48 @@ const BRACKET_ROUNDS = [
   ]},
 ];
 
+// Maps each R16+ match to the two predecessor match IDs that feed its slots
+const BRACKET_PREDECESSORS = {
+  'r16-1': ['r32-1',  'r32-2'],
+  'r16-2': ['r32-3',  'r32-4'],
+  'r16-3': ['r32-5',  'r32-6'],
+  'r16-4': ['r32-7',  'r32-8'],
+  'r16-5': ['r32-9',  'r32-10'],
+  'r16-6': ['r32-11', 'r32-12'],
+  'r16-7': ['r32-13', 'r32-14'],
+  'r16-8': ['r32-15', 'r32-16'],
+  'qf-1':  ['r16-1',  'r16-2'],
+  'qf-2':  ['r16-3',  'r16-4'],
+  'qf-3':  ['r16-5',  'r16-6'],
+  'qf-4':  ['r16-7',  'r16-8'],
+  'sf-1':  ['qf-1',   'qf-2'],
+  'sf-2':  ['qf-3',   'qf-4'],
+  'fin-1': ['sf-1',   'sf-2'],
+};
+
+// Returns all projected team names that could come out of a given match
+function getMatchCandidatesAll(matchId) {
+  const preds = BRACKET_PREDECESSORS[matchId];
+  if (!preds) {
+    const match = BRACKET_ROUNDS.flatMap(r => r.matches).find(m => m.id === matchId);
+    if (!match) return [];
+    const out = [];
+    if (match.team1) out.push(match.team1);
+    else { const t = getProjectedTeam(match.label1); if (t) out.push(t); }
+    if (match.team2) out.push(match.team2);
+    else { const t = getProjectedTeam(match.label2); if (t) out.push(t); }
+    return out;
+  }
+  return preds.flatMap(id => getMatchCandidatesAll(id));
+}
+
+// Returns candidate teams for one slot (home/away) of an R16+ match; null for R32
+function getSlotCandidates(matchId, side) {
+  const preds = BRACKET_PREDECESSORS[matchId];
+  if (!preds) return null;
+  return getMatchCandidatesAll(side === 'home' ? preds[0] : preds[1]);
+}
+
 // ─── BRACKET CARD HELPERS (shared by brackets and stadium view) ──────────────
 function groupFromLabel(label) {
   const m = label && label.match(/Group ([A-L])/);
@@ -1125,13 +1168,22 @@ function currentLeaderFlag(label) {
   return (name && TEAMS[name]?.flag) || '\u{1F3F3}\uFE0F';
 }
 
-function slotHtml(team, label, side) {
+function slotHtml(team, label, side, candidates) {
   const known = team && TEAMS[team];
   if (known) {
     return side === 'home'
       ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
       : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
   }
+  // R16+ TBD slots: show stacked projected flags (max 4)
+  if (candidates && candidates.length > 0) {
+    const flags = candidates.slice(0, 4).map(n => TEAMS[n]?.flag || '').filter(Boolean).join('');
+    const stackHtml = `<span class="ct-flags-stack">${flags}</span>`;
+    return side === 'home'
+      ? `${stackHtml}<span class="ct-name-tbd">${label}</span>`
+      : `<span class="ct-name-tbd">${label}</span>${stackHtml}`;
+  }
+  // R32 slots: single projected flag + label
   const grp = groupFromLabel(label);
   const projected = getProjectedTeam(label);
   const flag = (projected && TEAMS[projected]?.flag) || '\u{1F3F3}\uFE0F';
@@ -1144,6 +1196,8 @@ function slotHtml(team, label, side) {
 function bracketCardHtml(m) {
   const kickoff = m.date ? new Date(m.date) : null;
   const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
+  const cands1 = !m.team1 ? getSlotCandidates(m.id, 'home') : null;
+  const cands2 = !m.team2 ? getSlotCandidates(m.id, 'away') : null;
   return `
     <div class="match-card" data-bteam1="${m.team1 || ''}" data-bteam2="${m.team2 || ''}" data-venue="${m.venue || ''}">
       <div class="card-top">
@@ -1151,9 +1205,9 @@ function bracketCardHtml(m) {
         <span class="card-time">${timeStr}</span>
       </div>
       <div class="card-teams">
-        <div class="ct-home">${slotHtml(m.team1, m.label1, 'home')}</div>
+        <div class="ct-home">${slotHtml(m.team1, m.label1, 'home', cands1)}</div>
         <span class="ct-vs">vs</span>
-        <div class="ct-away">${slotHtml(m.team2, m.label2, 'away')}</div>
+        <div class="ct-away">${slotHtml(m.team2, m.label2, 'away', cands2)}</div>
       </div>
       <div class="card-bottom">
         <span class="card-venue">${m.venue || 'Venue TBD'}</span>
