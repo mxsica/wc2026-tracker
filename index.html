@@ -127,6 +127,7 @@
   .card-scorers-home { max-width: 50%; }
   .card-scorers-away { text-align: right; max-width: 50%; }
   .card-bottom { display: flex; justify-content: space-between; align-items: center; }
+  .card-bottom-right { display: flex; align-items: center; gap: 6px; }
   .card-venue { font-size: 12px; color: var(--text3); }
   .card-cd { font-size: 12px; color: var(--text3); }
   .card-cd.soon { color: var(--soon); font-weight: 600; }
@@ -888,8 +889,9 @@ function cardHtml(m) {
       </div>` : ''}
       <div class="card-bottom">
         <span class="card-venue">${m.venue}, ${m.city}</span>
-        <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>
-        ${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
+        <span class="card-bottom-right">
+          <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 add</span>` : ''}
+        </span>
       </div>
     </div>`;
 }
