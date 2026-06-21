@@ -1174,13 +1174,12 @@ function slotHtml(team, label, side, candidates) {
       ? `<span class="ct-flag">${TEAMS[team].flag}</span><span class="ct-name">${team}</span>`
       : `<span class="ct-name">${team}</span><span class="ct-flag">${TEAMS[team].flag}</span>`;
   }
-  // R16+ TBD slots: show full-size flags; Final (16 candidates) → white flag; TBD text only when ≤4 flags
+  // R16+ TBD slots: >8 candidates → white flag + TBD; 8 → flags only; ≤4 → flags + TBD
   if (candidates && candidates.length > 0) {
-    if (candidates.length > 8) return `<span class="ct-flag">\u{1F3F3}️</span>`;
-    const flags = candidates.map(n => TEAMS[n]?.flag || '').filter(Boolean).join('');
-    const showLabel = candidates.length <= 4;
-    const flagSpan = `<span class="ct-flag">${flags}</span>`;
-    const labelSpan = showLabel ? `<span class="ct-name-tbd">TBD</span>` : '';
+    const flagSpan = candidates.length > 8
+      ? `<span class="ct-flag">\u{1F3F3}️</span>`
+      : `<span class="ct-flag">${candidates.map(n => TEAMS[n]?.flag || '').filter(Boolean).join('')}</span>`;
+    const labelSpan = candidates.length !== 8 ? `<span class="ct-name-tbd">TBD</span>` : '';
     return side === 'home' ? `${flagSpan}${labelSpan}` : `${labelSpan}${flagSpan}`;
   }
   // R32 slots: single projected flag + label
