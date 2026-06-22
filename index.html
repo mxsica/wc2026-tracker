@@ -137,6 +137,7 @@
 
   /* STANDINGS */
   .standings-wrap { margin-bottom: 8px; }
+  .group-fixture-chips { display: flex; gap: 8px; padding: 4px 16px 8px; }
   .standings-label {
     font-size: 11px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
     color: var(--text3); padding: 20px 0 8px;
@@ -747,40 +748,10 @@ function renderTeamChips() {
   const wrap = document.getElementById('team-chips');
   wrap.style.display = 'flex';
 
-  const isGroupView = 'ABCDEFGHIJKL'.includes(currentGroup) && currentGroup.length === 1;
-  const isTeamView = !!currentTeamFilter;
-  let prefixHtml = '';
-
-  if (isGroupView || isTeamView) {
-    const contextMatches = MATCHES.filter(m =>
-      isTeamView ? (m.home === currentTeamFilter || m.away === currentTeamFilter) : m.group === currentGroup
-    );
-    const hasPast = contextMatches.some(m => matchStatus(m) === 'completed');
-    const hasUpcoming = contextMatches.some(m => matchStatus(m) !== 'completed');
-    if (hasPast && !hasUpcoming) {
-      // All games finished — no chips, force past filter so nothing is hidden
-      groupFixtureFilter = 'past';
-    } else if (hasPast && hasUpcoming) {
-      // Mix — show Upcoming/Past chips
-      prefixHtml = `
-        <div class="chip upcoming-chip ${groupFixtureFilter === 'upcoming' ? 'active-green' : ''}" data-gff="upcoming">Upcoming</div>
-        <div class="chip past-chip ${groupFixtureFilter === 'past' ? 'active-past' : ''}" data-gff="past">Past</div>`;
-    }
-  }
-
   const pool = Object.entries(TEAMS).sort((a, b) => a[0].localeCompare(b[0]));
-  wrap.innerHTML = prefixHtml + pool.map(([name, t]) =>
+  wrap.innerHTML = pool.map(([name, t]) =>
     `<div class="chip ${currentTeamFilter === name ? 'active' : ''}" data-team="${name}">${t.flag} ${name}</div>`
   ).join('');
-
-  wrap.querySelectorAll('.chip[data-gff]').forEach(el =>
-    el.addEventListener('click', () => {
-      if (el.dataset.gff === groupFixtureFilter) return;
-      groupFixtureFilter = el.dataset.gff;
-      renderTeamChips();
-      renderMatchList();
-    })
-  );
 
   wrap.querySelectorAll('.chip[data-team]').forEach(el =>
     el.addEventListener('click', () => {
@@ -960,6 +931,17 @@ function renderMatchList() {
     return;
   }
 
+  // Compute activeGroup early so we can adjust groupFixtureFilter before filtering
+  const activeGroup = currentTeamFilter ? TEAMS[currentTeamFilter]?.group : (['ALL','UPCOMING','PAST','ALL_GROUPS'].includes(currentGroup) ? null : currentGroup);
+
+  let hasPast = false, hasUpcoming = false;
+  if (activeGroup) {
+    const ctx = MATCHES.filter(m => currentTeamFilter ? (m.home === currentTeamFilter || m.away === currentTeamFilter) : m.group === activeGroup);
+    hasPast = ctx.some(m => matchStatus(m) === 'completed');
+    hasUpcoming = ctx.some(m => matchStatus(m) !== 'completed');
+    if (hasPast && !hasUpcoming) groupFixtureFilter = 'past';
+  }
+
   const filtered = filterMatches();
 
   if (filtered.length === 0) {
@@ -972,9 +954,17 @@ function renderMatchList() {
   const live = filtered.filter(m => matchStatus(m) === 'live');
   const rest = filtered.filter(m => matchStatus(m) !== 'live');
 
-
-
   let html = '';
+
+  if (activeGroup) {
+    html += standingsTableHtml(activeGroup, computeBestThirdSet());
+    if (hasPast && hasUpcoming) {
+      html += `<div class="group-fixture-chips">
+        <div class="chip upcoming-chip ${groupFixtureFilter === 'upcoming' ? 'active-green' : ''}" data-gff="upcoming">Upcoming</div>
+        <div class="chip past-chip ${groupFixtureFilter === 'past' ? 'active-past' : ''}" data-gff="past">Past</div>
+      </div>`;
+    }
+  }
 
   function renderByDate(matches) {
     const byDate = {};
@@ -984,7 +974,7 @@ function renderMatchList() {
       byDate[key].push(m);
     });
     const sortedKeys = Object.keys(byDate).sort();
-    const isPastView = currentGroup === 'PAST';
+    const isPastView = currentGroup === 'PAST' || (activeGroup && groupFixtureFilter === 'past');
     if (isPastView) sortedKeys.reverse();
     sortedKeys.forEach(key => {
       if (isPastView) byDate[key].reverse();
@@ -993,15 +983,18 @@ function renderMatchList() {
     });
   }
 
-  const activeGroup = currentTeamFilter ? TEAMS[currentTeamFilter]?.group : (['ALL','UPCOMING','PAST','ALL_GROUPS'].includes(currentGroup) ? null : currentGroup);
-
-  if (activeGroup) {
-    html = standingsTableHtml(activeGroup, computeBestThirdSet()) + html;
-  }
-
   renderByDate([...live, ...rest]);
 
   list.innerHTML = html;
+
+  list.querySelectorAll('[data-gff]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      if (el.dataset.gff === groupFixtureFilter) return;
+      groupFixtureFilter = el.dataset.gff;
+      renderMatchList();
+    });
+  });
 
   list.querySelectorAll('.card-group[data-group]').forEach(el => {
     el.addEventListener('click', e => {
