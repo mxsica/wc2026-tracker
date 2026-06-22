@@ -705,10 +705,19 @@ function countdownText(m) {
 
 function filterMatches() {
   return MATCHES.filter(m => {
-    if (currentTeamFilter) return m.home === currentTeamFilter || m.away === currentTeamFilter;
+    if (currentTeamFilter) {
+      if (m.home !== currentTeamFilter && m.away !== currentTeamFilter) return false;
+      if (groupFixtureFilter === 'upcoming') return matchStatus(m) !== 'completed';
+      if (groupFixtureFilter === 'past') return matchStatus(m) === 'completed';
+      return true;
+    }
     if (currentGroup === 'UPCOMING') return matchStatus(m) !== 'completed';
     if (currentGroup === 'PAST') return matchStatus(m) === 'completed';
-    return currentGroup === 'ALL' || m.group === currentGroup;
+    if (currentGroup === 'ALL' || currentGroup === 'ALL_GROUPS') return true;
+    if (m.group !== currentGroup) return false;
+    if (groupFixtureFilter === 'upcoming') return matchStatus(m) !== 'completed';
+    if (groupFixtureFilter === 'past') return matchStatus(m) === 'completed';
+    return true;
   });
 }
 
@@ -737,12 +746,43 @@ function renderBracketChips() {
 function renderTeamChips() {
   const wrap = document.getElementById('team-chips');
   wrap.style.display = 'flex';
-  const pool = Object.entries(TEAMS)
-    .sort((a, b) => a[0].localeCompare(b[0]));
-  wrap.innerHTML = pool.map(([name, t]) =>
+
+  const isGroupView = 'ABCDEFGHIJKL'.includes(currentGroup) && currentGroup.length === 1;
+  const isTeamView = !!currentTeamFilter;
+  let prefixHtml = '';
+
+  if (isGroupView || isTeamView) {
+    const contextMatches = MATCHES.filter(m =>
+      isTeamView ? (m.home === currentTeamFilter || m.away === currentTeamFilter) : m.group === currentGroup
+    );
+    const hasPast = contextMatches.some(m => matchStatus(m) === 'completed');
+    const hasUpcoming = contextMatches.some(m => matchStatus(m) !== 'completed');
+    if (hasPast && !hasUpcoming) {
+      // All games finished — no chips, force past filter so nothing is hidden
+      groupFixtureFilter = 'past';
+    } else if (hasPast && hasUpcoming) {
+      // Mix — show Upcoming/Past chips
+      prefixHtml = `
+        <div class="chip upcoming-chip ${groupFixtureFilter === 'upcoming' ? 'active-green' : ''}" data-gff="upcoming">Upcoming</div>
+        <div class="chip past-chip ${groupFixtureFilter === 'past' ? 'active-past' : ''}" data-gff="past">Past</div>`;
+    }
+  }
+
+  const pool = Object.entries(TEAMS).sort((a, b) => a[0].localeCompare(b[0]));
+  wrap.innerHTML = prefixHtml + pool.map(([name, t]) =>
     `<div class="chip ${currentTeamFilter === name ? 'active' : ''}" data-team="${name}">${t.flag} ${name}</div>`
   ).join('');
-  wrap.querySelectorAll('.chip').forEach(el =>
+
+  wrap.querySelectorAll('.chip[data-gff]').forEach(el =>
+    el.addEventListener('click', () => {
+      if (el.dataset.gff === groupFixtureFilter) return;
+      groupFixtureFilter = el.dataset.gff;
+      renderTeamChips();
+      renderMatchList();
+    })
+  );
+
+  wrap.querySelectorAll('.chip[data-team]').forEach(el =>
     el.addEventListener('click', () => {
       const name = el.dataset.team;
       if (currentTeamFilter === name) {
@@ -752,9 +792,9 @@ function renderTeamChips() {
         renderChips();
       } else {
         currentTeamFilter = name;
-        currentGroup = 'ALL'; // clear group selection
+        currentGroup = 'ALL';
         groupFixtureFilter = 'upcoming';
-        renderChips(); // deactivate group pills
+        renderChips();
       }
       renderTeamChips();
       renderMatchList();
