@@ -1005,6 +1005,9 @@ function renderMatchList() {
       renderChips();
       renderTeamChips();
       renderMatchList();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      const chip = document.querySelector(`#group-chips .chip[data-group="${currentGroup}"]`);
+      if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
     });
   });
 
@@ -1436,6 +1439,9 @@ function renderStadiums() {
       document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
       document.querySelector('.tab[data-tab="group-phase"]').classList.add('active');
       renderChips(); renderTeamChips(); renderMatchList();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      const chip = document.querySelector(`#group-chips .chip[data-group="${currentGroup}"]`);
+      if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
     });
   });
 
