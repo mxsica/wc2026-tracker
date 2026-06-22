@@ -987,6 +987,20 @@ function renderMatchList() {
 
   list.innerHTML = html;
 
+  list.querySelectorAll('.standings-label-link[data-grp]').forEach(el => {
+    el.addEventListener('click', () => {
+      currentGroup = el.dataset.grp;
+      currentTeamFilter = null;
+      groupFixtureFilter = 'upcoming';
+      renderChips();
+      renderTeamChips();
+      renderMatchList();
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      const chip = document.querySelector(`#group-chips .chip[data-group="${currentGroup}"]`);
+      if (chip) chip.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'instant' });
+    });
+  });
+
   list.querySelectorAll('[data-gff]').forEach(el => {
     el.addEventListener('click', e => {
       e.stopPropagation();
