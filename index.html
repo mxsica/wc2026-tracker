@@ -1195,10 +1195,10 @@ function getMatchCandidatesAll(matchId) {
     const match = BRACKET_ROUNDS.flatMap(r => r.matches).find(m => m.id === matchId);
     if (!match) return [];
     const out = [];
-    if (match.team1) out.push(match.team1);
-    else { const t = getProjectedTeam(match.label1); if (t) out.push(t); }
-    if (match.team2) out.push(match.team2);
-    else { const t = getProjectedTeam(match.label2); if (t) out.push(t); }
+    const t1 = match.team1 || getConfirmedTeam(match.label1) || getProjectedTeam(match.label1);
+    if (t1) out.push(t1);
+    const t2 = match.team2 || getConfirmedTeam(match.label2) || getProjectedTeam(match.label2);
+    if (t2) out.push(t2);
     return out;
   }
   return preds.flatMap(id => getMatchCandidatesAll(id));
@@ -1215,6 +1215,36 @@ function getSlotCandidates(matchId, side) {
 function groupFromLabel(label) {
   const m = label && label.match(/Group ([A-L])/);
   return m ? m[1] : null;
+}
+
+// Returns true when a group position can no longer change regardless of remaining games
+function isPositionConfirmed(pos, grp) {
+  const rows = STANDINGS[grp];
+  if (!rows || rows.length < 4) return false;
+  if (rows.every(t => t.p === 3)) return true; // group fully played
+  const team = rows[pos - 1];
+  if (!team) return false;
+  if (pos === 1) {
+    const second = rows[1];
+    return team.pts > second.pts + 3 * (3 - second.p);
+  }
+  if (pos === 2) {
+    if (!isPositionConfirmed(1, grp)) return false;
+    const third = rows[2];
+    return team.pts > third.pts + 3 * (3 - third.p);
+  }
+  return false; // 3rd/4th only confirmed when group is fully played (handled above)
+}
+
+// Returns the confirmed team for a label like "1st Group E", or null if not yet locked in
+function getConfirmedTeam(label) {
+  const m = label && label.match(/^(\d+)(?:st|nd|rd|th) Group ([A-L])$/);
+  if (!m) return null;
+  const pos = parseInt(m[1], 10);
+  const grp = m[2];
+  if (!isPositionConfirmed(pos, grp)) return null;
+  const rows = STANDINGS[grp];
+  return rows?.[pos - 1]?.name || null;
 }
 
 function getProjectedTeam(label) {
@@ -1277,20 +1307,22 @@ function slotHtml(team, label, side, candidates) {
 }
 
 function bracketCardHtml(m) {
+  const team1 = m.team1 || getConfirmedTeam(m.label1);
+  const team2 = m.team2 || getConfirmedTeam(m.label2);
   const kickoff = m.date ? new Date(m.date) : null;
   const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
-  const cands1 = !m.team1 ? getSlotCandidates(m.id, 'home') : null;
-  const cands2 = !m.team2 ? getSlotCandidates(m.id, 'away') : null;
+  const cands1 = !team1 ? getSlotCandidates(m.id, 'home') : null;
+  const cands2 = !team2 ? getSlotCandidates(m.id, 'away') : null;
   return `
-    <div class="match-card" data-bteam1="${m.team1 || ''}" data-bteam2="${m.team2 || ''}" data-venue="${m.venue || ''}">
+    <div class="match-card" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
       <div class="card-top">
         <span class="card-group">${m.round}</span>
         <span class="card-time">${timeStr}</span>
       </div>
       <div class="card-teams">
-        <div class="ct-home">${slotHtml(m.team1, m.label1, 'home', cands1)}</div>
+        <div class="ct-home">${slotHtml(team1, m.label1, 'home', cands1)}</div>
         <span class="ct-vs">vs</span>
-        <div class="ct-away">${slotHtml(m.team2, m.label2, 'away', cands2)}</div>
+        <div class="ct-away">${slotHtml(team2, m.label2, 'away', cands2)}</div>
       </div>
       <div class="card-bottom">
         <span class="card-venue">${m.venue || 'Venue TBD'}</span>
