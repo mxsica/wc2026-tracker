@@ -1226,12 +1226,12 @@ function isPositionConfirmed(pos, grp) {
   if (!team) return false;
   if (pos === 1) {
     const second = rows[1];
-    return team.pts >= second.pts + 3 * (3 - second.p);
+    return team.pts > second.pts + 3 * (3 - second.p);
   }
   if (pos === 2) {
     if (!isPositionConfirmed(1, grp)) return false;
     const third = rows[2];
-    return team.pts >= third.pts + 3 * (3 - third.p);
+    return team.pts > third.pts + 3 * (3 - third.p);
   }
   return false; // 3rd/4th only confirmed when group is fully played (handled above)
 }
