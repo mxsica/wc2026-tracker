@@ -960,8 +960,8 @@ function renderMatchList() {
     html += standingsTableHtml(activeGroup, computeBestThirdSet());
     if (hasPast && hasUpcoming) {
       html += `<div class="group-fixture-chips">
-        <div class="chip upcoming-chip ${groupFixtureFilter === 'upcoming' ? 'active-green' : ''}" data-gff="upcoming">Upcoming</div>
-        <div class="chip past-chip ${groupFixtureFilter === 'past' ? 'active-past' : ''}" data-gff="past">Past</div>
+        <div class="chip ${groupFixtureFilter === 'upcoming' ? 'active' : ''}" data-gff="upcoming">Upcoming</div>
+        <div class="chip ${groupFixtureFilter === 'past' ? 'active' : ''}" data-gff="past">Past</div>
       </div>`;
     }
   }
