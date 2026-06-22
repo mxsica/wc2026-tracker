@@ -1018,7 +1018,7 @@ function renderMatchList() {
 
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('.card-venue')) return;
+      if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('[data-gff]') || e.target.closest('.card-cal-btn')) return;
       const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
       const relX = clickX - rect.left;
@@ -1417,7 +1417,7 @@ function renderStadiums() {
 
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('.card-venue')) return;
+      if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('.card-cal-btn')) return;
       const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
       const teamName = clickX < rect.left + rect.width / 2 ? card.dataset.home : card.dataset.away;
