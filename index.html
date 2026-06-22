@@ -1397,7 +1397,7 @@ function renderStadiums() {
   });
 
   list.innerHTML = html;
-  list.scrollIntoView({ behavior: 'instant', block: 'start' });
+  window.scrollTo({ top: 0, behavior: 'instant' });
 
   document.getElementById('stadium-back').addEventListener('click', () => {
     currentStadium = null;
