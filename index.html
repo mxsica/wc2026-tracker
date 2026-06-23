@@ -448,13 +448,19 @@ function setErrorBanner(show) {
 }
 
 function checkPolling() {
-  // Use matchStatus so time-based live games also trigger polling
-  const anyLive = MATCHES.some(m => matchStatus(m) === 'live');
-  setLiveDot(anyLive);
-  if (anyLive && !pollHandle) {
+  const now = Date.now();
+  const anyActive = MATCHES.some(m => {
+    const espn = ESPN_STATES[m.id];
+    if (espn === 'post') return false;                          // ESPN confirmed done
+    if (espn === 'in')   return true;                           // ESPN confirmed live
+    const start = m.kickoff.getTime();
+    return now >= start && now < start + 130 * 60 * 1000;      // kickoff reached, not yet expired
+  });
+  setLiveDot(anyActive);
+  if (anyActive && !pollHandle) {
     pollHandle = setInterval(fetchLiveData, 30000);
-    fetchLiveData(); // immediate fetch when a game just went live
-  } else if (!anyLive && pollHandle) {
+    fetchLiveData();
+  } else if (!anyActive && pollHandle) {
     clearInterval(pollHandle);
     pollHandle = null;
   }
