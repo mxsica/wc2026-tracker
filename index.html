@@ -476,9 +476,19 @@ async function fetchStandings() {
     for (const group of (data.children || [])) {
       for (const entry of (group.standings?.entries || [])) {
         const note = entry.note;
-        if (!note || note.rank == null) continue;
+        if (!note) continue;
+        const color = (note.color || '').toLowerCase();
+        const desc  = (note.description || '').toLowerCase();
+        // Only treat as confirmed when ESPN explicitly marks advancement (green note)
+        // Green: green channel dominant (e.g. '03a603','00cc00','007a3d')
+        // Yellow/red = still competing or eliminated — ignore those
+        const r = parseInt(color.slice(0,2)||'0',16), g = parseInt(color.slice(2,4)||'0',16), b = parseInt(color.slice(4,6)||'0',16);
+        const isGreen = color.length === 6 && g > r && g > b && g > 80;
+        const isAdvanced = isGreen || desc.includes('advance') || desc.includes('qualif') || desc.includes('clinch');
+        if (!isAdvanced || note.rank == null) continue;
         const name = mapEspnName(entry.team?.displayName || '');
         if (name) QUALIFIED_POSITIONS[name] = parseInt(note.rank, 10);
+        console.log('[standings]', name, 'rank', note.rank, 'color', color, 'desc', desc);
       }
     }
   } catch (e) {
