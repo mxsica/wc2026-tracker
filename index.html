@@ -385,10 +385,11 @@ function mapEspnName(n) { return ESPN_NAME_MAP[n] || n; }
 const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
 
 // ─── RESULTS & STANDINGS (populated by fetchLiveData) ────────────────────────
-const RESULTS        = {};
-const STANDINGS      = {};
-const CLOCKS         = {}; // matchId → ESPN displayClock string for live games
-const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fetches)
+const RESULTS           = {};
+const STANDINGS         = {};
+const QUALIFIED_POSITIONS = {}; // teamName → confirmed group position (1,2,3) from ESPN standings API
+const CLOCKS            = {}; // matchId → ESPN displayClock string for live games
+const ESPN_EVENT_IDS    = {}; // matchId → ESPN numeric event id (for summary fetches)
 const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
 const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
 const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
@@ -466,9 +467,31 @@ function checkPolling() {
   }
 }
 
+async function fetchStandings() {
+  try {
+    const res = await fetch('https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings');
+    if (!res.ok) return;
+    const data = await res.json();
+    for (const k of Object.keys(QUALIFIED_POSITIONS)) delete QUALIFIED_POSITIONS[k];
+    for (const group of (data.children || [])) {
+      for (const entry of (group.standings?.entries || [])) {
+        const note = entry.note;
+        if (!note || note.rank == null) continue;
+        const name = mapEspnName(entry.team?.displayName || '');
+        if (name) QUALIFIED_POSITIONS[name] = parseInt(note.rank, 10);
+      }
+    }
+  } catch (e) {
+    console.warn('[standings] fetch failed', e);
+  }
+}
+
 async function fetchLiveData() {
   try {
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260627&limit=200');
+    const [res] = await Promise.all([
+      fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260627&limit=200'),
+      fetchStandings(),
+    ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
@@ -1270,9 +1293,14 @@ function getConfirmedTeam(label) {
   if (!m) return null;
   const pos = parseInt(m[1], 10);
   const grp = m[2];
-  if (!isPositionConfirmed(pos, grp)) return null;
   const rows = STANDINGS[grp];
-  return rows?.[pos - 1]?.name || null;
+  if (!rows || rows.length < pos) return null;
+  const candidate = rows[pos - 1].name;
+  // Trust ESPN's explicit qualification data (accounts for H2H and all FIFA tiebreakers)
+  if (QUALIFIED_POSITIONS[candidate] === pos) return candidate;
+  // Fall back to points-only mathematical check (catches groups where all games are done)
+  if (isPositionConfirmed(pos, grp)) return candidate;
+  return null;
 }
 
 function getProjectedTeam(label) {
