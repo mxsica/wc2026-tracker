@@ -865,6 +865,28 @@ function downloadICS(m) {
   document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
+function downloadBracketICS(m, team1, team2) {
+  const pad = n => String(n).padStart(2, '0');
+  const fmtUTC = d => `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  const kickoff = new Date(m.date);
+  const end = new Date(kickoff.getTime() + 120 * 60 * 1000);
+  const ics = [
+    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//WC 2026 Tracker//EN',
+    'BEGIN:VEVENT',
+    `DTSTART:${fmtUTC(kickoff)}`, `DTEND:${fmtUTC(end)}`,
+    `SUMMARY:${team1} vs ${team2} – ${m.round || 'FIFA World Cup 2026'}`,
+    `LOCATION:${m.venue}`, 'DESCRIPTION:FIFA World Cup 2026',
+    `UID:${m.id}@wc2026tracker`,
+    'END:VEVENT', 'END:VCALENDAR'
+  ].join('\r\n');
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `wc2026-${m.id}.ics`;
+  document.body.appendChild(a); a.click();
+  document.body.removeChild(a); URL.revokeObjectURL(url);
+}
+
 function cardHtml(m) {
   const { text, cls } = countdownText(m);
   const isLive = cls === 'live';
@@ -1326,7 +1348,10 @@ function bracketCardHtml(m) {
       </div>
       <div class="card-bottom">
         <span class="card-venue">${m.venue || 'Venue TBD'}</span>
-        <span class="card-cd">${kickoff ? 'in ' + Math.ceil((kickoff - Date.now()) / 86400000) + 'd' : ''}</span>
+        <span class="card-bottom-right">
+          <span class="card-cd">${kickoff ? 'in ' + Math.ceil((kickoff - Date.now()) / 86400000) + 'd' : ''}</span>
+          ${team1 && team2 && kickoff && kickoff > Date.now() ? `<span class="card-cal-btn" data-bcal-id="${m.id}">📅 Add</span>` : ''}
+        </span>
       </div>
     </div>`;
 }
@@ -1384,11 +1409,23 @@ function renderBrackets() {
 
   list.querySelectorAll('.match-card[data-bteam1]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('.card-venue')) return;
+      if (e.target.closest('.card-venue') || e.target.closest('.card-cal-btn')) return;
       const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
       const t = clickX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2;
       if (t && TEAMS[t]) selectTeam(t);
+    });
+  });
+
+  list.querySelectorAll('.card-cal-btn[data-bcal-id]').forEach(el => {
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      const roundEntry = BRACKET_ROUNDS.find(r => r.matches.some(x => x.id === el.dataset.bcalId));
+      const bm = roundEntry?.matches.find(x => x.id === el.dataset.bcalId);
+      if (!bm || !bm.date) return;
+      const t1 = bm.team1 || getConfirmedTeam(bm.label1);
+      const t2 = bm.team2 || getConfirmedTeam(bm.label2);
+      if (t1 && t2) downloadBracketICS({ ...bm, round: roundEntry.label }, t1, t2);
     });
   });
 
