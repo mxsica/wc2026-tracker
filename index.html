@@ -385,11 +385,10 @@ function mapEspnName(n) { return ESPN_NAME_MAP[n] || n; }
 const ESPN_STATES = {}; // matchId → 'pre'|'in'|'post'
 
 // ─── RESULTS & STANDINGS (populated by fetchLiveData) ────────────────────────
-const RESULTS           = {};
-const STANDINGS         = {};
-const QUALIFIED_POSITIONS = {}; // teamName → confirmed group position (1,2,3) from ESPN standings API
-const CLOCKS            = {}; // matchId → ESPN displayClock string for live games
-const ESPN_EVENT_IDS    = {}; // matchId → ESPN numeric event id (for summary fetches)
+const RESULTS        = {};
+const STANDINGS      = {};
+const CLOCKS         = {}; // matchId → ESPN displayClock string for live games
+const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fetches)
 const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
 const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
 const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
@@ -467,39 +466,9 @@ function checkPolling() {
   }
 }
 
-async function fetchStandings() {
-  try {
-    const res = await fetch('https://site.api.espn.com/apis/v2/sports/soccer/fifa.world/standings');
-    if (!res.ok) return;
-    const data = await res.json();
-    for (const k of Object.keys(QUALIFIED_POSITIONS)) delete QUALIFIED_POSITIONS[k];
-    for (const group of (data.children || [])) {
-      for (const entry of (group.standings?.entries || [])) {
-        const note = entry.note;
-        if (!note) continue;
-        const color = (note.color || '').toLowerCase();
-        const desc  = (note.description || '').toLowerCase();
-        // Only treat as confirmed when ESPN explicitly marks direct advancement (rank 1 or 2)
-        // "best 8 advance" = rank 3 still competing for best-3rd spots — exclude those
-        const isAdvanced = (desc.includes('advance') && !desc.includes('best 8')) ||
-                           desc.includes('qualif') || desc.includes('clinch');
-        if (!isAdvanced || note.rank == null || note.rank > 2) continue;
-        const name = mapEspnName(entry.team?.displayName || '');
-        if (name) QUALIFIED_POSITIONS[name] = parseInt(note.rank, 10);
-        console.log('[standings]', name, 'rank', note.rank, 'color', color, 'desc', desc);
-      }
-    }
-  } catch (e) {
-    console.warn('[standings] fetch failed', e);
-  }
-}
-
 async function fetchLiveData() {
   try {
-    const [res] = await Promise.all([
-      fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260627&limit=200'),
-      fetchStandings(),
-    ]);
+    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260627&limit=200');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
@@ -1276,23 +1245,42 @@ function groupFromLabel(label) {
   return m ? m[1] : null;
 }
 
-// Returns true when a group position can no longer change regardless of remaining games
+// Returns H2H result for teamA vs teamB from RESULTS: 'win'|'draw'|'loss'|null (not played)
+function getH2HResult(teamA, teamB) {
+  const match = MATCHES.find(m =>
+    (m.home === teamA && m.away === teamB) || (m.home === teamB && m.away === teamA)
+  );
+  if (!match) return null;
+  const r = RESULTS[match.id];
+  if (!r) return null;
+  const scoreA = match.home === teamA ? r.hs : r.as;
+  const scoreB = match.home === teamA ? r.as : r.hs;
+  return scoreA > scoreB ? 'win' : scoreA < scoreB ? 'loss' : 'draw';
+}
+
+// Returns true when a group position is mathematically confirmed using FIFA 2026 rules:
+// tied teams ranked by H2H points first, then overall GD, etc.
+// A position P is confirmed when fewer than P other teams can possibly finish above.
 function isPositionConfirmed(pos, grp) {
   const rows = STANDINGS[grp];
   if (!rows || rows.length < 4) return false;
   if (rows.every(t => t.p === 3)) return true; // group fully played
   const team = rows[pos - 1];
   if (!team) return false;
-  if (pos === 1) {
-    const second = rows[1];
-    return team.pts > second.pts + 3 * (3 - second.p);
+
+  let canFinishAbove = 0;
+  for (const rival of rows.filter((_, i) => i !== pos - 1)) {
+    const maxRivalPts = rival.pts + 3 * (3 - rival.p);
+    if (maxRivalPts > team.pts) {
+      canFinishAbove++;
+    } else if (maxRivalPts === team.pts) {
+      // Tied on pts → H2H is first FIFA 2026 tiebreaker
+      // If H2H not won by this team (not played, draw, or loss), rival could finish above
+      if (getH2HResult(team.name, rival.name) !== 'win') canFinishAbove++;
+    }
+    if (canFinishAbove >= pos) return false;
   }
-  if (pos === 2) {
-    if (!isPositionConfirmed(1, grp)) return false;
-    const third = rows[2];
-    return team.pts > third.pts + 3 * (3 - third.p);
-  }
-  return false; // 3rd/4th only confirmed when group is fully played (handled above)
+  return true;
 }
 
 // Returns the confirmed team for a label like "1st Group E", or null if not yet locked in
@@ -1303,12 +1291,8 @@ function getConfirmedTeam(label) {
   const grp = m[2];
   const rows = STANDINGS[grp];
   if (!rows || rows.length < pos) return null;
-  const candidate = rows[pos - 1].name;
-  // Trust ESPN's explicit qualification data (accounts for H2H and all FIFA tiebreakers)
-  if (QUALIFIED_POSITIONS[candidate] === pos) return candidate;
-  // Fall back to points-only mathematical check (catches groups where all games are done)
-  if (isPositionConfirmed(pos, grp)) return candidate;
-  return null;
+  if (!isPositionConfirmed(pos, grp)) return null;
+  return rows[pos - 1].name;
 }
 
 function getProjectedTeam(label) {
