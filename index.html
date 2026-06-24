@@ -1259,27 +1259,44 @@ function getH2HResult(teamA, teamB) {
 }
 
 // Returns true when a group position is mathematically confirmed using FIFA 2026 rules:
-// tied teams ranked by H2H points first, then overall GD, etc.
-// A position P is confirmed when fewer than P other teams can possibly finish above.
+// H2H is the first tiebreaker when teams are level on points.
+// Position P is confirmed only when:
+//   1. Fewer than P rivals can possibly finish above this team (guaranteed top-P)
+//   2. At least P-1 rivals are guaranteed to finish above (team can't rise higher than P)
 function isPositionConfirmed(pos, grp) {
   const rows = STANDINGS[grp];
   if (!rows || rows.length < 4) return false;
-  if (rows.every(t => t.p === 3)) return true; // group fully played
+  if (rows.every(t => t.p === 3)) return true; // group fully played — position locked by sort
   const team = rows[pos - 1];
   if (!team) return false;
 
+  const teamMaxPts = team.pts + 3 * (3 - team.p);
   let canFinishAbove = 0;
+  let guaranteedAbove = 0;
+
   for (const rival of rows.filter((_, i) => i !== pos - 1)) {
     const maxRivalPts = rival.pts + 3 * (3 - rival.p);
+
+    // Can rival finish above this team?
     if (maxRivalPts > team.pts) {
       canFinishAbove++;
     } else if (maxRivalPts === team.pts) {
-      // Tied on pts → H2H is first FIFA 2026 tiebreaker
-      // If H2H not won by this team (not played, draw, or loss), rival could finish above
       if (getH2HResult(team.name, rival.name) !== 'win') canFinishAbove++;
     }
     if (canFinishAbove >= pos) return false;
+
+    // Is rival guaranteed to finish above this team even in the best case?
+    // (rival's current pts alone beat team's max possible pts)
+    if (rival.pts > teamMaxPts) {
+      guaranteedAbove++;
+    } else if (rival.pts === teamMaxPts) {
+      if (getH2HResult(rival.name, team.name) === 'win') guaranteedAbove++;
+    }
   }
+
+  // For position P > 1: at least P-1 teams must be locked above (team can't rise to P-1 or better)
+  if (pos > 1 && guaranteedAbove < pos - 1) return false;
+
   return true;
 }
 
