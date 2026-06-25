@@ -210,14 +210,27 @@
   .btree-wrap--cols .btree-col::-webkit-scrollbar { display: none; }
   .btree-wrap--cols .btree-slot { display: block; flex-shrink: 0; }
 
-  /* Tree view — compact btcard pairs, SVG connectors, resets slot heights per pair */
-  .btree-wrap--tree { overflow-y: auto; }
-  .btree-pairs { display: flex; gap: 48px; padding: 12px 16px 48px; min-width: max-content; align-items: flex-start; }
-  .btree-pair { position: relative; }
-  .btree-wrap--tree .btree-cols { gap: 32px; }
-  .btree-wrap--tree .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
-  .btree-wrap--tree .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
-  .btree-wrap--tree .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
+  /* Tree view — pair carousel, one pair visible at a time */
+  .btree-wrap--tree { overflow: visible; }
+  .btree-nav-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 16px 0; position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  .btree-nav-btn {
+    width: 34px; height: 34px; border-radius: 50%; border: 1.5px solid var(--border);
+    background: var(--surface); color: var(--text); font-size: 18px; line-height: 1;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  }
+  .btree-nav-btn:disabled { opacity: 0.25; cursor: default; }
+  .btree-nav-dots { display: flex; gap: 6px; align-items: center; }
+  .btree-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border); transition: background 0.2s; }
+  .btree-dot.active { background: var(--text); }
+  .btree-pair { position: relative; padding: 0 16px 48px; }
+  .btree-pair .btree-cols { display: flex; gap: 24px; }
+  .btree-pair .btree-col { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .btree-col-label { position: sticky; top: 54px; background: var(--bg); z-index: 3; }
+  .btree-pair .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
+  .btree-pair .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
   .btree-pair .btree-cols > .btree-col:nth-child(1) .btree-slot { height: 180px; }
   .btree-pair .btree-cols > .btree-col:nth-child(2) .btree-slot { height: 360px; }
   .btree-pair-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
@@ -693,6 +706,7 @@ let currentTab = 'group-phase';
 let currentGroup = 'UPCOMING';
 let bracketFilter = 'upcoming';
 let bracketView = 'list'; // 'list' | 'columns' | 'tree'
+let bracketTreePair = 0;
 let currentTeamFilter = null;
 let groupFixtureFilter = 'upcoming';
 let currentStadium = null;
@@ -822,6 +836,7 @@ function renderBracketChips() {
     el.addEventListener('click', () => {
       if (el.dataset.bv === bracketView) return;
       bracketView = el.dataset.bv;
+      if (bracketView === 'tree') bracketTreePair = 0;
       renderBracketChips();
       renderBrackets();
     })
@@ -1692,86 +1707,100 @@ function renderBracketColumns() {
   attachBracketCardListeners(list);
 }
 
+// Overlapping pairs: each round appears as right col of one slide and left col of next
+const TREE_PAIRS = [
+  [BRACKET_ROUNDS[0], BRACKET_ROUNDS[1]], // R32 → R16
+  [BRACKET_ROUNDS[1], BRACKET_ROUNDS[2]], // R16 → QF
+  [BRACKET_ROUNDS[2], BRACKET_ROUNDS[3]], // QF  → SF
+  [BRACKET_ROUNDS[3], BRACKET_ROUNDS[4]], // SF  → Final
+];
+
 function renderBracketTree() {
   const list = document.getElementById('match-list');
   list.style.padding = '0';
 
-  // Split rounds into pairs — each pair resets slot heights independently
-  const PAIRS = [
-    [BRACKET_ROUNDS[0], BRACKET_ROUNDS[1]], // R32 + R16
-    [BRACKET_ROUNDS[2], BRACKET_ROUNDS[3]], // QF + SF
-    [BRACKET_ROUNDS[4]],                    // Final
-  ];
+  const pair = TREE_PAIRS[bracketTreePair];
+  const isFirst = bracketTreePair === 0;
+  const isLast  = bracketTreePair === TREE_PAIRS.length - 1;
 
-  const pairsHtml = PAIRS.map(pair => {
-    const colsHtml = pair.map(({ key, label, matches }) => {
-      const slots = matches.map(m =>
-        `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
-      ).join('');
-      return `<div class="btree-col" data-round="${key}">
-        <div class="btree-col-label">${label}</div>
-        ${slots}
-      </div>`;
-    }).join('');
-    const hasSvg = pair.length === 2;
-    return `<div class="btree-pair">
-      <div class="btree-cols">${colsHtml}</div>
-      ${hasSvg ? '<svg class="btree-pair-svg"></svg>' : ''}
+  const colsHtml = pair.map(({ key, label, matches }) => {
+    const slots = matches.map(m =>
+      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
+    ).join('');
+    return `<div class="btree-col" data-round="${key}">
+      <div class="btree-col-label">${label}</div>
+      ${slots}
     </div>`;
   }).join('');
 
-  list.innerHTML = `<div class="btree-wrap btree-wrap--tree" id="btree-wrap">
-    <div class="btree-pairs" id="btree-pairs">${pairsHtml}</div>
-  </div>`;
+  const dots = TREE_PAIRS.map((_, i) =>
+    `<span class="btree-dot${i === bracketTreePair ? ' active' : ''}"></span>`
+  ).join('');
+
+  list.innerHTML = `
+    <div class="btree-nav-bar">
+      <button class="btree-nav-btn" id="btree-prev"${isFirst ? ' disabled' : ''}>&#8249;</button>
+      <div class="btree-nav-dots">${dots}</div>
+      <button class="btree-nav-btn" id="btree-next"${isLast ? ' disabled' : ''}>&#8250;</button>
+    </div>
+    <div class="btree-wrap btree-wrap--tree" id="btree-wrap">
+      <div class="btree-pair" id="btree-pair">
+        <div class="btree-cols">${colsHtml}</div>
+        <svg class="btree-pair-svg"></svg>
+      </div>
+    </div>`;
+
+  document.getElementById('btree-prev').addEventListener('click', () => {
+    if (bracketTreePair > 0) { bracketTreePair--; window.scrollTo(0, 0); renderBracketTree(); }
+  });
+  document.getElementById('btree-next').addEventListener('click', () => {
+    if (bracketTreePair < TREE_PAIRS.length - 1) { bracketTreePair++; window.scrollTo(0, 0); renderBracketTree(); }
+  });
 
   attachBracketCardListeners(list);
   requestAnimationFrame(() => requestAnimationFrame(drawBracketConnectors));
 }
 
 function drawBracketConnectors() {
-  const wrap = document.getElementById('btree-wrap');
-  if (!wrap) return;
+  const pairEl = document.getElementById('btree-pair');
+  if (!pairEl) return;
+  const svg = pairEl.querySelector('.btree-pair-svg');
+  if (!svg) return;
+
   const color = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#334155';
-
-  wrap.querySelectorAll('.btree-pair').forEach(pairEl => {
-    const svg = pairEl.querySelector('.btree-pair-svg');
-    if (!svg) return;
-
-    const pairRect = pairEl.getBoundingClientRect();
-    const toLocal = rect => ({
-      left:  rect.left  - pairRect.left,
-      right: rect.right - pairRect.left,
-      cy:    rect.top   + rect.height / 2 - pairRect.top,
-    });
-
-    let lines = '';
-    pairEl.querySelectorAll('.btree-cols > .btree-col:nth-child(2) .btree-slot[data-match-id]').forEach(slot => {
-      const childId = slot.dataset.matchId;
-      const preds = BRACKET_PREDECESSORS[childId];
-      if (!preds) return;
-      const childCard = slot.querySelector('.match-card');
-      const pACard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[0]}"] .match-card`);
-      const pBCard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[1]}"] .match-card`);
-      if (!childCard || !pACard || !pBCard) return;
-
-      const child = toLocal(childCard.getBoundingClientRect());
-      const pA    = toLocal(pACard.getBoundingClientRect());
-      const pB    = toLocal(pBCard.getBoundingClientRect());
-      const midX  = (pA.right + child.left) / 2;
-
-      lines += `<line x1="${pA.right}" y1="${pA.cy}" x2="${midX}" y2="${pA.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-      lines += `<line x1="${pB.right}" y1="${pB.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-      lines += `<line x1="${midX}" y1="${pA.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-      lines += `<line x1="${midX}" y1="${child.cy}" x2="${child.left}" y2="${child.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-    });
-
-    const colsEl = pairEl.querySelector('.btree-cols');
-    svg.setAttribute('width',  colsEl.scrollWidth);
-    svg.setAttribute('height', colsEl.scrollHeight);
-    svg.style.width  = colsEl.scrollWidth  + 'px';
-    svg.style.height = colsEl.scrollHeight + 'px';
-    svg.innerHTML = lines;
+  const pairRect = pairEl.getBoundingClientRect();
+  const toLocal = rect => ({
+    left:  rect.left  - pairRect.left,
+    right: rect.right - pairRect.left,
+    cy:    rect.top   + rect.height / 2 - pairRect.top,
   });
+
+  let lines = '';
+  pairEl.querySelectorAll('.btree-cols > .btree-col:nth-child(2) .btree-slot[data-match-id]').forEach(slot => {
+    const childId = slot.dataset.matchId;
+    const preds = BRACKET_PREDECESSORS[childId];
+    if (!preds) return;
+    const childCard = slot.querySelector('.match-card');
+    const pACard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[0]}"] .match-card`);
+    const pBCard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[1]}"] .match-card`);
+    if (!childCard || !pACard || !pBCard) return;
+
+    const child = toLocal(childCard.getBoundingClientRect());
+    const pA    = toLocal(pACard.getBoundingClientRect());
+    const pB    = toLocal(pBCard.getBoundingClientRect());
+    const midX  = (pA.right + child.left) / 2;
+
+    lines += `<line x1="${pA.right}" y1="${pA.cy}" x2="${midX}" y2="${pA.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+    lines += `<line x1="${pB.right}" y1="${pB.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+    lines += `<line x1="${midX}" y1="${pA.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+    lines += `<line x1="${midX}" y1="${child.cy}" x2="${child.left}" y2="${child.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+  });
+
+  svg.setAttribute('width',  pairEl.scrollWidth);
+  svg.setAttribute('height', pairEl.scrollHeight);
+  svg.style.width  = pairEl.scrollWidth  + 'px';
+  svg.style.height = pairEl.scrollHeight + 'px';
+  svg.innerHTML = lines;
 }
 
 // ─── STADIUMS VIEW ───────────────────────────────────────────────────────────
