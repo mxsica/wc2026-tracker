@@ -190,21 +190,23 @@
 .grp-link { cursor: pointer; }
 
   /* BRACKET TREE VIEW */
-  .btree-wrap { position: relative; overflow-x: auto; overflow-y: visible; padding: 12px 16px 48px; }
-  .btree-cols { display: flex; gap: 32px; min-width: max-content; align-items: flex-start; }
-  .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
+  .btree-wrap { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; padding: 0; }
+  .btree-cols { display: flex; gap: 16px; padding: 0 16px 100px; min-width: max-content; height: calc(100svh - 130px); align-items: flex-start; }
+  .btree-col {
+    flex: 0 0 min(calc(100vw - 32px), 448px);
+    width: min(calc(100vw - 32px), 448px);
+    display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden; height: 100%;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .btree-col::-webkit-scrollbar { display: none; }
   .btree-col-label {
     font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--text); text-align: center; padding-bottom: 10px; white-space: nowrap;
+    color: var(--text); text-align: center; padding: 12px 0 10px; white-space: nowrap;
+    position: sticky; top: 0; background: var(--bg); z-index: 3; flex-shrink: 0;
   }
-  .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
-  .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
-  [data-round="r32"] .btree-slot { height: 180px; }
-  [data-round="r16"] .btree-slot { height: 360px; }
-  [data-round="qf"]  .btree-slot { height: 720px; }
-  [data-round="sf"]  .btree-slot { height: 1440px; }
-  [data-round="fin"] .btree-slot { height: 2880px; }
-  #btree-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+  .btree-slot { display: block; flex-shrink: 0; }
+  #btree-svg { display: none; }
 
   /* Tree card — compact vertical layout for bracket columns */
   .btcard { padding: 12px 14px !important; cursor: pointer; }
@@ -1659,7 +1661,7 @@ function renderBracketTree() {
 
   const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
     const slots = matches.map(m =>
-      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
+      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardHtml({ ...m, round: label })}</div>`
     ).join('');
     return `<div class="btree-col" data-round="${key}">
       <div class="btree-col-label">${label}</div>
@@ -1669,11 +1671,9 @@ function renderBracketTree() {
 
   list.innerHTML = `<div class="btree-wrap" id="btree-wrap">
     <div class="btree-cols" id="btree-cols">${colsHtml}</div>
-    <svg id="btree-svg"></svg>
   </div>`;
 
   attachBracketCardListeners(list);
-  requestAnimationFrame(() => requestAnimationFrame(drawBracketConnectors));
 }
 
 function drawBracketConnectors() {
