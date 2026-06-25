@@ -217,6 +217,8 @@
   .btcard-tbd-label { font-size: 12px; font-weight: 600; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
   .btcard-flag-proj { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .btcard-cand-flags { font-size: 15px; line-height: 1; flex-shrink: 0; letter-spacing: -2px; }
+  .btcard-cand-flags-2row { display: flex; flex-direction: column; gap: 2px; flex-shrink: 0; }
+  .btcard-cand-flags-2row > span { font-size: 15px; line-height: 1; letter-spacing: -2px; }
   .btcard-score { font-size: 16px; font-weight: 700; color: var(--text); margin-left: auto; flex-shrink: 0; padding-left: 6px; }
   .btcard-vs {
     font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
@@ -1511,20 +1513,27 @@ function bracketCardTreeHtml(m) {
         ${score !== null ? `<span class="btcard-score">${score}</span>` : ''}
       </div>`;
     }
-    // TBD — show projected flag (dimmed) or candidate flags for later rounds
+    // TBD — show projected flag or candidate flags (same thresholds as list view)
     const proj = getProjectedTeam(label);
     let flagHtml = '';
+    let showLabel = true;
     if (proj && TEAMS[proj]) {
       flagHtml = `<span class="btcard-flag btcard-flag-proj">${TEAMS[proj].flag}</span>`;
     } else {
-      const cands = (getSlotCandidates(m.id, isHome ? 'home' : 'away') || []).slice(0, 4);
-      if (cands.length) {
+      const allCands = getSlotCandidates(m.id, isHome ? 'home' : 'away') || [];
+      const cands = allCands.slice(0, 8);
+      if (cands.length > 4) {
+        showLabel = false;
+        const row1 = cands.slice(0, 4).map(t => TEAMS[t]?.flag || '').join('');
+        const row2 = cands.slice(4).map(t => TEAMS[t]?.flag || '').join('');
+        flagHtml = `<span class="btcard-cand-flags btcard-cand-flags-2row"><span>${row1}</span><span>${row2}</span></span>`;
+      } else if (cands.length > 0) {
         flagHtml = `<span class="btcard-cand-flags">${cands.map(t => TEAMS[t]?.flag || '').join('')}</span>`;
       }
     }
     return `<div class="btcard-team btcard-team-tbd">
       ${flagHtml}
-      <span class="btcard-tbd-label">${label || 'TBD'}</span>
+      ${showLabel ? `<span class="btcard-tbd-label">${label || 'TBD'}</span>` : ''}
     </div>`;
   };
 
