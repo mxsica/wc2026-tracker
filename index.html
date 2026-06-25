@@ -93,6 +93,10 @@
   /* MATCH LIST */
   .match-list { padding: 0 16px 100px; }
   .last-updated { font-size: 11px; color: var(--text3); white-space: nowrap; }
+  .round-header {
+    font-size: 17px; font-weight: 800; color: var(--text);
+    padding: 28px 0 6px; border-bottom: 1px solid var(--border); margin-bottom: 2px;
+  }
   .date-header {
     font-size: 13px; font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase;
     color: var(--text); padding: 20px 0 10px;
@@ -1611,26 +1615,30 @@ function renderBracketList() {
   const list = document.getElementById('match-list');
   list.style.padding = '';
 
-  const allBracketMatches = BRACKET_ROUNDS.flatMap(({ label, matches }) =>
-    matches.map(m => ({ ...m, round: label }))
-  ).filter(m => {
-    const isPast = m.date && new Date(m.date) < Date.now();
-    return bracketFilter === 'past' ? isPast : !isPast;
-  });
-
-  const byDate = {};
-  allBracketMatches.forEach(m => {
-    const key = m.date ? new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(new Date(m.date)) : 'tbd';
-    if (!byDate[key]) byDate[key] = [];
-    byDate[key].push(m);
-  });
-
   const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, { weekday:'long', month:'long', day:'numeric', timeZone: LOCAL_TZ });
   let html = '';
-  Object.keys(byDate).sort().forEach(key => {
-    const label = key === 'tbd' ? 'Date TBD' : fmtDayHeader.format(new Date(key + 'T12:00:00'));
-    html += `<div class="date-header">${label}</div>`;
-    byDate[key].forEach(m => { html += bracketCardHtml(m); });
+
+  BRACKET_ROUNDS.forEach(({ label, matches }) => {
+    const filtered = matches.map(m => ({ ...m, round: label })).filter(m => {
+      const isPast = m.date && new Date(m.date) < Date.now();
+      return bracketFilter === 'past' ? isPast : !isPast;
+    });
+    if (!filtered.length) return;
+
+    html += `<div class="round-header">${label}</div>`;
+
+    const byDate = {};
+    filtered.forEach(m => {
+      const key = m.date ? new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(new Date(m.date)) : 'tbd';
+      if (!byDate[key]) byDate[key] = [];
+      byDate[key].push(m);
+    });
+
+    Object.keys(byDate).sort().forEach(key => {
+      const dateLabel = key === 'tbd' ? 'Date TBD' : fmtDayHeader.format(new Date(key + 'T12:00:00'));
+      html += `<div class="date-header">${dateLabel}</div>`;
+      byDate[key].forEach(m => { html += bracketCardHtml(m); });
+    });
   });
 
   list.innerHTML = html;
