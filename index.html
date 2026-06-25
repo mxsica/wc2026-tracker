@@ -190,8 +190,8 @@
   .btree-cols { display: flex; gap: 32px; min-width: max-content; align-items: flex-start; }
   .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
   .btree-col-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
-    color: var(--text3); text-align: center; padding-bottom: 10px; white-space: nowrap;
+    font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
+    color: var(--text); text-align: center; padding-bottom: 10px; white-space: nowrap;
   }
   .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
   .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
@@ -211,8 +211,8 @@
   .btcard-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .btcard-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
   .btcard-tbd-label { font-size: 12px; font-weight: 600; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
-  .btcard-flag-proj { font-size: 22px; line-height: 1; flex-shrink: 0; opacity: 0.35; }
-  .btcard-cand-flags { font-size: 15px; line-height: 1; flex-shrink: 0; letter-spacing: -2px; opacity: 0.5; }
+  .btcard-flag-proj { font-size: 22px; line-height: 1; flex-shrink: 0; }
+  .btcard-cand-flags { font-size: 15px; line-height: 1; flex-shrink: 0; letter-spacing: -2px; }
   .btcard-score { font-size: 16px; font-weight: 700; color: var(--text); margin-left: auto; flex-shrink: 0; padding-left: 6px; }
   .btcard-vs {
     font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
@@ -983,7 +983,7 @@ function cardHtml(m) {
         <div class="card-scorers-away">${awayScorers}</div>
       </div>` : ''}
       <div class="card-bottom">
-        <span class="card-venue">${m.city} · ${m.venue}</span>
+        <span class="card-venue">${groupVenueLabel(m.city, m.venue)}</span>
         <span class="card-bottom-right">
           <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 Add</span>` : ''}
         </span>
@@ -1296,17 +1296,36 @@ function getSlotCandidates(matchId, side) {
 }
 
 // ─── VENUE HELPERS ───────────────────────────────────────────────────────────
-// Bracket venues are stored as "Stadium, City, ST" — extract the city+state part
+// Normalise state/province/country abbreviations
+function venueSuffix(raw) {
+  if (!raw) return '';
+  if (raw === 'Mexico') return 'MX';
+  if (raw === 'ON' || raw === 'BC') return 'CAN';
+  return raw; // US state code as-is
+}
+// Group match cities that need a country suffix
+const CITY_SUFFIX = {
+  'Mexico City': 'MX', 'Zapopan': 'MX', 'Guadalupe': 'MX',
+  'Toronto': 'CAN', 'Vancouver': 'CAN',
+};
+// Bracket venues: "Stadium, City, ST" → "City, XX"
 function bracketVenueCity(venue) {
   if (!venue) return '';
   const p = venue.split(',').map(s => s.trim());
-  return p.length >= 3 ? `${p[1]}, ${p[2]}` : p[1] || '';
+  if (p.length < 2) return '';
+  return `${p[1]}, ${venueSuffix(p[2])}`;
 }
-// For list cards: "City, ST · Stadium"
+// For bracket list cards: "City, XX · Stadium"
 function bracketVenueFull(venue) {
   if (!venue) return 'TBD';
   const p = venue.split(',').map(s => s.trim());
-  return p.length >= 3 ? `${p[1]}, ${p[2]} · ${p[0]}` : venue;
+  if (p.length < 3) return venue;
+  return `${p[1]}, ${venueSuffix(p[2])} · ${p[0]}`;
+}
+// For group match cards: "City[, XX] · Stadium"
+function groupVenueLabel(city, stadium) {
+  const sfx = CITY_SUFFIX[city];
+  return sfx ? `${city}, ${sfx} · ${stadium}` : `${city} · ${stadium}`;
 }
 
 // ─── BRACKET CARD HELPERS (shared by brackets and stadium view) ──────────────
