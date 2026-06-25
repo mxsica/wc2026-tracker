@@ -195,11 +195,11 @@
   }
   .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
   .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
-  [data-round="r32"] .btree-slot { height: 152px; }
-  [data-round="r16"] .btree-slot { height: 304px; }
-  [data-round="qf"]  .btree-slot { height: 608px; }
-  [data-round="sf"]  .btree-slot { height: 1216px; }
-  [data-round="fin"] .btree-slot { height: 2432px; }
+  [data-round="r32"] .btree-slot { height: 180px; }
+  [data-round="r16"] .btree-slot { height: 360px; }
+  [data-round="qf"]  .btree-slot { height: 720px; }
+  [data-round="sf"]  .btree-slot { height: 1440px; }
+  [data-round="fin"] .btree-slot { height: 2880px; }
   #btree-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 
   /* Tree card — compact vertical layout for bracket columns */
@@ -210,7 +210,9 @@
   .btcard-team { display: flex; align-items: center; gap: 7px; min-height: 28px; }
   .btcard-flag { font-size: 22px; line-height: 1; flex-shrink: 0; }
   .btcard-name { font-size: 14px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
-  .btcard-tbd-label { font-size: 13px; font-weight: 600; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .btcard-tbd-label { font-size: 12px; font-weight: 600; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; min-width: 0; }
+  .btcard-flag-proj { font-size: 22px; line-height: 1; flex-shrink: 0; opacity: 0.35; }
+  .btcard-cand-flags { font-size: 15px; line-height: 1; flex-shrink: 0; letter-spacing: -2px; opacity: 0.5; }
   .btcard-score { font-size: 16px; font-weight: 700; color: var(--text); margin-left: auto; flex-shrink: 0; padding-left: 6px; }
   .btcard-vs {
     font-size: 10px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
@@ -981,7 +983,7 @@ function cardHtml(m) {
         <div class="card-scorers-away">${awayScorers}</div>
       </div>` : ''}
       <div class="card-bottom">
-        <span class="card-venue">${m.venue}, ${m.city}</span>
+        <span class="card-venue">${m.city} · ${m.venue}</span>
         <span class="card-bottom-right">
           <span class="card-cd ${isDone ? 'done' : cls}" data-id="${isDone ? '' : m.id}">${isDone ? '' : isLive ? '' : text}</span>${!isLive && !isDone ? `<span class="card-cal-btn" data-cal-id="${m.id}">📅 Add</span>` : ''}
         </span>
@@ -1293,6 +1295,20 @@ function getSlotCandidates(matchId, side) {
   return getMatchCandidatesAll(side === 'home' ? preds[0] : preds[1]);
 }
 
+// ─── VENUE HELPERS ───────────────────────────────────────────────────────────
+// Bracket venues are stored as "Stadium, City, ST" — extract the city+state part
+function bracketVenueCity(venue) {
+  if (!venue) return '';
+  const p = venue.split(',').map(s => s.trim());
+  return p.length >= 3 ? `${p[1]}, ${p[2]}` : p[1] || '';
+}
+// For list cards: "City, ST · Stadium"
+function bracketVenueFull(venue) {
+  if (!venue) return 'TBD';
+  const p = venue.split(',').map(s => s.trim());
+  return p.length >= 3 ? `${p[1]}, ${p[2]} · ${p[0]}` : venue;
+}
+
 // ─── BRACKET CARD HELPERS (shared by brackets and stadium view) ──────────────
 function groupFromLabel(label) {
   const m = label && label.match(/Group ([A-L])/);
@@ -1444,7 +1460,7 @@ function bracketCardHtml(m) {
         <div class="ct-away">${slotHtml(team2, m.label2, 'away', cands2)}</div>
       </div>
       <div class="card-bottom">
-        <span class="card-venue">${m.venue || 'Venue TBD'}</span>
+        <span class="card-venue">${bracketVenueFull(m.venue)}</span>
         <span class="card-bottom-right">
           <span class="card-cd">${kickoff ? 'in ' + Math.ceil((kickoff - Date.now()) / 86400000) + 'd' : ''}</span>
           ${team1 && team2 && kickoff && kickoff > Date.now() ? `<span class="card-cal-btn" data-bcal-id="${m.id}">📅 Add</span>` : ''}
@@ -1465,15 +1481,31 @@ function bracketCardTreeHtml(m) {
   const score1  = result != null ? result.hs : null;
   const score2  = result != null ? result.as : null;
 
-  const teamRow = (team, label, score) => {
-    const inner = team
-      ? `<span class="btcard-flag">${TEAMS[team]?.flag || ''}</span><span class="btcard-name">${team}</span>`
-      : `<span class="btcard-tbd-label">${label || 'TBD'}</span>`;
-    const scoreHtml = score !== null ? `<span class="btcard-score">${score}</span>` : '';
-    return `<div class="btcard-team">${inner}${scoreHtml}</div>`;
+  const slotRow = (team, label, isHome, score) => {
+    if (team) {
+      return `<div class="btcard-team">
+        <span class="btcard-flag">${TEAMS[team]?.flag || ''}</span>
+        <span class="btcard-name">${team}</span>
+        ${score !== null ? `<span class="btcard-score">${score}</span>` : ''}
+      </div>`;
+    }
+    // TBD — show projected flag (dimmed) or candidate flags for later rounds
+    const proj = getProjectedTeam(label);
+    let flagHtml = '';
+    if (proj && TEAMS[proj]) {
+      flagHtml = `<span class="btcard-flag btcard-flag-proj">${TEAMS[proj].flag}</span>`;
+    } else {
+      const cands = (getSlotCandidates(m.id, isHome ? 'home' : 'away') || []).slice(0, 4);
+      if (cands.length) {
+        flagHtml = `<span class="btcard-cand-flags">${cands.map(t => TEAMS[t]?.flag || '').join('')}</span>`;
+      }
+    }
+    return `<div class="btcard-team btcard-team-tbd">
+      ${flagHtml}
+      <span class="btcard-tbd-label">${label || 'TBD'}</span>
+    </div>`;
   };
 
-  const venueShort = (m.venue || '').split(',')[0] || 'TBD';
   const calBtn = team1 && team2 && kickoff && kickoff > Date.now()
     ? `<span class="card-cal-btn btcard-cal" data-bcal-id="${m.id}">📅</span>` : '';
   const cdHtml = daysLeft !== null && daysLeft > 0
@@ -1485,11 +1517,11 @@ function bracketCardTreeHtml(m) {
         <span class="btcard-date">${dateStr}</span>
         <span class="btcard-time">${timeStr}</span>
       </div>
-      ${teamRow(team1, m.label1, score1)}
+      ${slotRow(team1, m.label1, true, score1)}
       <div class="btcard-vs">vs</div>
-      ${teamRow(team2, m.label2, score2)}
+      ${slotRow(team2, m.label2, false, score2)}
       <div class="btcard-bottom">
-        <span class="btcard-venue">${venueShort}</span>
+        <span class="btcard-venue">${bracketVenueCity(m.venue) || 'TBD'}</span>
         <span class="btcard-bottom-right">${cdHtml}${calBtn}</span>
       </div>
     </div>`;
