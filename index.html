@@ -1033,6 +1033,8 @@ function cardHtml(m) {
 // ─── RENDER MATCH LIST ───────────────────────────────────────────────────────
 function renderMatchList() {
   const list = document.getElementById('match-list');
+  list.style.height = '';
+  list.style.overflow = '';
   if (currentTab === 'brackets') {
     list.innerHTML = '<div class="empty-state">Bracket available after group stage</div>';
     return;
