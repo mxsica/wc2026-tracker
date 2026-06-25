@@ -186,21 +186,41 @@
 .grp-link { cursor: pointer; }
 
   /* BRACKET TREE VIEW */
-  .btree-wrap { position: relative; overflow-x: auto; overflow-y: visible; padding: 8px 16px 40px; }
-  .btree-cols { display: flex; gap: 24px; min-width: max-content; align-items: flex-start; }
-  .btree-col { width: 200px; flex: 0 0 200px; display: flex; flex-direction: column; }
+  .btree-wrap { position: relative; overflow-x: auto; overflow-y: visible; padding: 12px 16px 48px; }
+  .btree-cols { display: flex; gap: 32px; min-width: max-content; align-items: flex-start; }
+  .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
   .btree-col-label {
-    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
-    color: var(--text3); text-align: center; padding-bottom: 8px; white-space: nowrap;
+    font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+    color: var(--text3); text-align: center; padding-bottom: 10px; white-space: nowrap;
   }
   .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
-  .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; flex-shrink: 0; }
-  [data-round="r32"] .btree-slot { height: 140px; }
-  [data-round="r16"] .btree-slot { height: 280px; }
-  [data-round="qf"]  .btree-slot { height: 560px; }
-  [data-round="sf"]  .btree-slot { height: 1120px; }
-  [data-round="fin"] .btree-slot { height: 2240px; }
+  .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
+  [data-round="r32"] .btree-slot { height: 136px; }
+  [data-round="r16"] .btree-slot { height: 272px; }
+  [data-round="qf"]  .btree-slot { height: 544px; }
+  [data-round="sf"]  .btree-slot { height: 1088px; }
+  [data-round="fin"] .btree-slot { height: 2176px; }
   #btree-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+
+  /* Tree card — compact vertical layout for bracket columns */
+  .btcard { padding: 10px 12px !important; cursor: pointer; }
+  .btcard-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .btcard-time { font-size: 12px; font-weight: 500; color: var(--text2); }
+  .btcard-cd { font-size: 11px; color: var(--text3); }
+  .btcard-team { display: flex; align-items: center; gap: 6px; min-height: 24px; }
+  .btcard-flag { font-size: 20px; line-height: 1; flex-shrink: 0; }
+  .btcard-name { font-size: 13px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btcard-tbd-label { font-size: 11px; font-weight: 600; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btcard-vs {
+    font-size: 9px; font-weight: 600; letter-spacing: 0.5px; text-transform: uppercase;
+    color: var(--text3); display: flex; align-items: center; gap: 6px; padding: 4px 0;
+  }
+  .btcard-vs::before, .btcard-vs::after {
+    content: ''; flex: 1; height: 1px; background: var(--border);
+  }
+  .btcard-bottom { display: flex; justify-content: space-between; align-items: center; margin-top: 8px; gap: 4px; }
+  .btcard-venue { font-size: 10px; color: var(--text3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: 1; }
+  .btcard-cal { font-size: 12px; flex-shrink: 0; cursor: pointer; color: var(--text3); }
 
   /* STADIUMS VIEW */
   .stadium-list { display: flex; flex-direction: column; gap: 0; }
@@ -1432,6 +1452,45 @@ function bracketCardHtml(m) {
     </div>`;
 }
 
+// Compact vertical card for the tree view — teams stacked top/bottom
+function bracketCardTreeHtml(m) {
+  const team1  = m.team1 || getConfirmedTeam(m.label1);
+  const team2  = m.team2 || getConfirmedTeam(m.label2);
+  const kickoff = m.date ? new Date(m.date) : null;
+  const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
+  const daysLeft = kickoff ? Math.ceil((kickoff - Date.now()) / 86400000) : null;
+
+  const teamRow = team => team
+    ? `<div class="btcard-team">
+         <span class="btcard-flag">${TEAMS[team]?.flag || ''}</span>
+         <span class="btcard-name">${team}</span>
+       </div>`
+    : '';
+
+  const tbd1 = !team1 ? `<div class="btcard-team"><span class="btcard-tbd-label">${m.label1 || 'TBD'}</span></div>` : '';
+  const tbd2 = !team2 ? `<div class="btcard-team"><span class="btcard-tbd-label">${m.label2 || 'TBD'}</span></div>` : '';
+
+  const calBtn = team1 && team2 && kickoff && kickoff > Date.now()
+    ? `<span class="card-cal-btn btcard-cal" data-bcal-id="${m.id}">📅</span>` : '';
+
+  const venueShort = (m.venue || '').split(',')[0] || 'TBD';
+
+  return `
+    <div class="match-card btcard" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
+      <div class="btcard-top">
+        <span class="btcard-time">${timeStr}</span>
+        ${daysLeft !== null && daysLeft > 0 ? `<span class="btcard-cd">in ${daysLeft}d</span>` : ''}
+      </div>
+      ${teamRow(team1)}${tbd1}
+      <div class="btcard-vs">vs</div>
+      ${teamRow(team2)}${tbd2}
+      <div class="btcard-bottom">
+        <span class="btcard-venue">${venueShort}</span>
+        ${calBtn}
+      </div>
+    </div>`;
+}
+
 // ─── RENDER BRACKETS ─────────────────────────────────────────────────────────
 function renderBrackets() {
   if (bracketView === 'tree') renderBracketTree();
@@ -1457,9 +1516,12 @@ function attachBracketCardListeners(container) {
   container.querySelectorAll('.match-card[data-bteam1]').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-venue') || e.target.closest('.card-cal-btn')) return;
-      const clickX = e.clientX;
       const rect = card.getBoundingClientRect();
-      const t = clickX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2;
+      // Tree cards: teams are stacked vertically — use Y midpoint
+      // List cards: teams are side-by-side — use X midpoint
+      const t = card.classList.contains('btcard')
+        ? (e.clientY < rect.top + rect.height / 2 ? card.dataset.bteam1 : card.dataset.bteam2)
+        : (e.clientX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2);
       if (t && TEAMS[t]) selectTeam(t);
     });
   });
@@ -1526,7 +1588,7 @@ function renderBracketTree() {
 
   const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
     const slots = matches.map(m =>
-      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardHtml({ ...m, round: label })}</div>`
+      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
     ).join('');
     return `<div class="btree-col" data-round="${key}">
       <div class="btree-col-label">${label}</div>
