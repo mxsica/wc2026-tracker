@@ -189,24 +189,38 @@
   .ct-name-tbd { font-size: 17px; font-weight: 700; color: var(--text3); }
 .grp-link { cursor: pointer; }
 
-  /* BRACKET TREE VIEW */
+  /* BRACKET TREE / COLUMNS VIEWS — shared */
   .btree-wrap { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; padding: 0; }
-  .btree-cols { display: flex; gap: 16px; padding: 0 16px 100px; min-width: max-content; height: calc(100svh - 130px); align-items: flex-start; }
-  .btree-col {
-    flex: 0 0 min(calc(100vw - 32px), 448px);
-    width: min(calc(100vw - 32px), 448px);
-    display: flex; flex-direction: column;
-    overflow-y: auto; overflow-x: hidden; height: 100%;
-    scrollbar-width: none; -webkit-overflow-scrolling: touch;
-  }
-  .btree-col::-webkit-scrollbar { display: none; }
+  .btree-cols { display: flex; min-width: max-content; align-items: flex-start; }
   .btree-col-label {
     font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
     color: var(--text); text-align: center; padding: 12px 0 10px; white-space: nowrap;
     position: sticky; top: 0; background: var(--bg); z-index: 3; flex-shrink: 0;
   }
-  .btree-slot { display: block; flex-shrink: 0; }
-  #btree-svg { display: none; }
+
+  /* Columns view — full-width list cards, independent column scroll */
+  .btree-wrap--cols .btree-cols { gap: 16px; padding: 0 16px 100px; height: calc(100svh - 130px); }
+  .btree-wrap--cols .btree-col {
+    flex: 0 0 min(calc(100vw - 32px), 448px); width: min(calc(100vw - 32px), 448px);
+    display: flex; flex-direction: column;
+    overflow-y: auto; overflow-x: hidden; height: 100%;
+    scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  }
+  .btree-wrap--cols .btree-col::-webkit-scrollbar { display: none; }
+  .btree-wrap--cols .btree-slot { display: block; flex-shrink: 0; }
+
+  /* Tree view — compact btcard columns, fixed-height slots, SVG connectors */
+  .btree-wrap--tree { position: relative; padding: 12px 16px 48px; }
+  .btree-wrap--tree .btree-cols { gap: 32px; }
+  .btree-wrap--tree .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
+  .btree-wrap--tree .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
+  .btree-wrap--tree .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
+  .btree-wrap--tree [data-round="r32"] .btree-slot { height: 180px; }
+  .btree-wrap--tree [data-round="r16"] .btree-slot { height: 360px; }
+  .btree-wrap--tree [data-round="qf"]  .btree-slot { height: 720px; }
+  .btree-wrap--tree [data-round="sf"]  .btree-slot { height: 1440px; }
+  .btree-wrap--tree [data-round="fin"] .btree-slot { height: 2880px; }
+  #btree-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 
   /* Tree card — compact vertical layout for bracket columns */
   .btcard { padding: 12px 14px !important; cursor: pointer; }
@@ -678,7 +692,7 @@ function formatScorerSide(list) {
 let currentTab = 'group-phase';
 let currentGroup = 'UPCOMING';
 let bracketFilter = 'upcoming';
-let bracketView = 'list'; // 'list' | 'tree'
+let bracketView = 'list'; // 'list' | 'columns' | 'tree'
 let currentTeamFilter = null;
 let groupFixtureFilter = 'upcoming';
 let currentStadium = null;
@@ -792,6 +806,7 @@ function renderBracketChips() {
 
   wrap.innerHTML = `
     <div class="chip ${bracketView === 'list' ? 'active' : ''}" data-bv="list">List</div>
+    <div class="chip ${bracketView === 'columns' ? 'active' : ''}" data-bv="columns">Columns</div>
     <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>
     ${filterChips}`;
 
@@ -1562,7 +1577,8 @@ function bracketCardTreeHtml(m) {
 
 // ─── RENDER BRACKETS ─────────────────────────────────────────────────────────
 function renderBrackets() {
-  if (bracketView === 'tree') renderBracketTree();
+  if (bracketView === 'columns') renderBracketColumns();
+  else if (bracketView === 'tree') renderBracketTree();
   else renderBracketList();
 }
 
@@ -1655,7 +1671,7 @@ function renderBracketList() {
   attachBracketCardListeners(list);
 }
 
-function renderBracketTree() {
+function renderBracketColumns() {
   const list = document.getElementById('match-list');
   list.style.padding = '0';
 
@@ -1669,11 +1685,34 @@ function renderBracketTree() {
     </div>`;
   }).join('');
 
-  list.innerHTML = `<div class="btree-wrap" id="btree-wrap">
+  list.innerHTML = `<div class="btree-wrap btree-wrap--cols" id="btree-wrap">
     <div class="btree-cols" id="btree-cols">${colsHtml}</div>
   </div>`;
 
   attachBracketCardListeners(list);
+}
+
+function renderBracketTree() {
+  const list = document.getElementById('match-list');
+  list.style.padding = '0';
+
+  const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
+    const slots = matches.map(m =>
+      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
+    ).join('');
+    return `<div class="btree-col" data-round="${key}">
+      <div class="btree-col-label">${label}</div>
+      ${slots}
+    </div>`;
+  }).join('');
+
+  list.innerHTML = `<div class="btree-wrap btree-wrap--tree" id="btree-wrap">
+    <div class="btree-cols" id="btree-cols">${colsHtml}</div>
+    <svg id="btree-svg"></svg>
+  </div>`;
+
+  attachBracketCardListeners(list);
+  requestAnimationFrame(() => requestAnimationFrame(drawBracketConnectors));
 }
 
 function drawBracketConnectors() {
