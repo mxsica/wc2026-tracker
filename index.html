@@ -190,7 +190,8 @@
 .grp-link { cursor: pointer; }
 
   /* BRACKET TREE / COLUMNS VIEWS — shared */
-  .btree-wrap { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; padding: 0; }
+  .btree-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; padding: 0; }
+  .btree-wrap--cols { overflow-y: hidden; }
   .btree-cols { display: flex; min-width: max-content; align-items: flex-start; }
   .btree-col-label {
     font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;
@@ -209,18 +210,17 @@
   .btree-wrap--cols .btree-col::-webkit-scrollbar { display: none; }
   .btree-wrap--cols .btree-slot { display: block; flex-shrink: 0; }
 
-  /* Tree view — compact btcard columns, fixed-height slots, SVG connectors */
-  .btree-wrap--tree { position: relative; padding: 12px 16px 48px; }
+  /* Tree view — compact btcard pairs, SVG connectors, resets slot heights per pair */
+  .btree-wrap--tree { overflow-y: auto; }
+  .btree-pairs { display: flex; gap: 48px; padding: 12px 16px 48px; min-width: max-content; align-items: flex-start; }
+  .btree-pair { position: relative; }
   .btree-wrap--tree .btree-cols { gap: 32px; }
   .btree-wrap--tree .btree-col { width: 188px; flex: 0 0 188px; display: flex; flex-direction: column; }
   .btree-wrap--tree .btree-slot { display: flex; align-items: center; box-sizing: border-box; }
   .btree-wrap--tree .btree-slot .match-card { margin: 0; width: 100%; box-sizing: border-box; }
-  .btree-wrap--tree [data-round="r32"] .btree-slot { height: 180px; }
-  .btree-wrap--tree [data-round="r16"] .btree-slot { height: 360px; }
-  .btree-wrap--tree [data-round="qf"]  .btree-slot { height: 720px; }
-  .btree-wrap--tree [data-round="sf"]  .btree-slot { height: 1440px; }
-  .btree-wrap--tree [data-round="fin"] .btree-slot { height: 2880px; }
-  #btree-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
+  .btree-pair .btree-cols > .btree-col:nth-child(1) .btree-slot { height: 180px; }
+  .btree-pair .btree-cols > .btree-col:nth-child(2) .btree-slot { height: 360px; }
+  .btree-pair-svg { position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible; }
 
   /* Tree card — compact vertical layout for bracket columns */
   .btcard { padding: 12px 14px !important; cursor: pointer; }
@@ -1696,19 +1696,32 @@ function renderBracketTree() {
   const list = document.getElementById('match-list');
   list.style.padding = '0';
 
-  const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
-    const slots = matches.map(m =>
-      `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
-    ).join('');
-    return `<div class="btree-col" data-round="${key}">
-      <div class="btree-col-label">${label}</div>
-      ${slots}
+  // Split rounds into pairs — each pair resets slot heights independently
+  const PAIRS = [
+    [BRACKET_ROUNDS[0], BRACKET_ROUNDS[1]], // R32 + R16
+    [BRACKET_ROUNDS[2], BRACKET_ROUNDS[3]], // QF + SF
+    [BRACKET_ROUNDS[4]],                    // Final
+  ];
+
+  const pairsHtml = PAIRS.map(pair => {
+    const colsHtml = pair.map(({ key, label, matches }) => {
+      const slots = matches.map(m =>
+        `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
+      ).join('');
+      return `<div class="btree-col" data-round="${key}">
+        <div class="btree-col-label">${label}</div>
+        ${slots}
+      </div>`;
+    }).join('');
+    const hasSvg = pair.length === 2;
+    return `<div class="btree-pair">
+      <div class="btree-cols">${colsHtml}</div>
+      ${hasSvg ? '<svg class="btree-pair-svg"></svg>' : ''}
     </div>`;
   }).join('');
 
   list.innerHTML = `<div class="btree-wrap btree-wrap--tree" id="btree-wrap">
-    <div class="btree-cols" id="btree-cols">${colsHtml}</div>
-    <svg id="btree-svg"></svg>
+    <div class="btree-pairs" id="btree-pairs">${pairsHtml}</div>
   </div>`;
 
   attachBracketCardListeners(list);
@@ -1717,47 +1730,48 @@ function renderBracketTree() {
 
 function drawBracketConnectors() {
   const wrap = document.getElementById('btree-wrap');
-  const svg = document.getElementById('btree-svg');
-  const cols = document.getElementById('btree-cols');
-  if (!wrap || !svg || !cols) return;
+  if (!wrap) return;
+  const color = getComputedStyle(document.documentElement).getPropertyValue('--border').trim() || '#334155';
 
-  const wrapRect = wrap.getBoundingClientRect();
-  const sLeft = wrap.scrollLeft;
-  const sTop = wrap.scrollTop;
+  wrap.querySelectorAll('.btree-pair').forEach(pairEl => {
+    const svg = pairEl.querySelector('.btree-pair-svg');
+    if (!svg) return;
 
-  // Get connector color from CSS variable
-  const style = getComputedStyle(document.documentElement);
-  const color = style.getPropertyValue('--border').trim() || '#334155';
+    const pairRect = pairEl.getBoundingClientRect();
+    const toLocal = rect => ({
+      left:  rect.left  - pairRect.left,
+      right: rect.right - pairRect.left,
+      cy:    rect.top   + rect.height / 2 - pairRect.top,
+    });
 
-  const toLocal = rect => ({
-    left:  rect.left  - wrapRect.left + sLeft,
-    right: rect.right - wrapRect.left + sLeft,
-    cy:    rect.top + rect.height / 2 - wrapRect.top + sTop,
+    let lines = '';
+    pairEl.querySelectorAll('.btree-cols > .btree-col:nth-child(2) .btree-slot[data-match-id]').forEach(slot => {
+      const childId = slot.dataset.matchId;
+      const preds = BRACKET_PREDECESSORS[childId];
+      if (!preds) return;
+      const childCard = slot.querySelector('.match-card');
+      const pACard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[0]}"] .match-card`);
+      const pBCard = pairEl.querySelector(`.btree-cols > .btree-col:nth-child(1) .btree-slot[data-match-id="${preds[1]}"] .match-card`);
+      if (!childCard || !pACard || !pBCard) return;
+
+      const child = toLocal(childCard.getBoundingClientRect());
+      const pA    = toLocal(pACard.getBoundingClientRect());
+      const pB    = toLocal(pBCard.getBoundingClientRect());
+      const midX  = (pA.right + child.left) / 2;
+
+      lines += `<line x1="${pA.right}" y1="${pA.cy}" x2="${midX}" y2="${pA.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+      lines += `<line x1="${pB.right}" y1="${pB.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+      lines += `<line x1="${midX}" y1="${pA.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+      lines += `<line x1="${midX}" y1="${child.cy}" x2="${child.left}" y2="${child.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
+    });
+
+    const colsEl = pairEl.querySelector('.btree-cols');
+    svg.setAttribute('width',  colsEl.scrollWidth);
+    svg.setAttribute('height', colsEl.scrollHeight);
+    svg.style.width  = colsEl.scrollWidth  + 'px';
+    svg.style.height = colsEl.scrollHeight + 'px';
+    svg.innerHTML = lines;
   });
-
-  let lines = '';
-  for (const [childId, [pAId, pBId]] of Object.entries(BRACKET_PREDECESSORS)) {
-    const childCard = wrap.querySelector(`.btree-slot[data-match-id="${childId}"] .match-card`);
-    const pACard   = wrap.querySelector(`.btree-slot[data-match-id="${pAId}"] .match-card`);
-    const pBCard   = wrap.querySelector(`.btree-slot[data-match-id="${pBId}"] .match-card`);
-    if (!childCard || !pACard || !pBCard) continue;
-
-    const child = toLocal(childCard.getBoundingClientRect());
-    const pA    = toLocal(pACard.getBoundingClientRect());
-    const pB    = toLocal(pBCard.getBoundingClientRect());
-    const midX  = (pA.right + child.left) / 2;
-
-    lines += `<line x1="${pA.right}" y1="${pA.cy}" x2="${midX}" y2="${pA.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-    lines += `<line x1="${pB.right}" y1="${pB.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-    lines += `<line x1="${midX}" y1="${pA.cy}" x2="${midX}" y2="${pB.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-    lines += `<line x1="${midX}" y1="${child.cy}" x2="${child.left}" y2="${child.cy}" stroke="${color}" stroke-width="1.5" stroke-linecap="round"/>`;
-  }
-
-  svg.setAttribute('width', cols.scrollWidth);
-  svg.setAttribute('height', cols.scrollHeight);
-  svg.style.width  = cols.scrollWidth  + 'px';
-  svg.style.height = cols.scrollHeight + 'px';
-  svg.innerHTML = lines;
 }
 
 // ─── STADIUMS VIEW ───────────────────────────────────────────────────────────
