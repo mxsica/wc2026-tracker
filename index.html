@@ -787,10 +787,9 @@ function renderBracketChips() {
     <div class="chip ${bracketFilter === 'past' ? 'active' : ''}" data-bf="past">Past</div>` : '';
 
   wrap.innerHTML = `
-    ${filterChips}
-    <div style="flex:1;min-width:4px"></div>
     <div class="chip ${bracketView === 'list' ? 'active' : ''}" data-bv="list">List</div>
-    <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>`;
+    <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>
+    ${filterChips}`;
 
   wrap.querySelectorAll('[data-bf]').forEach(el =>
     el.addEventListener('click', () => {
