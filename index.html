@@ -627,7 +627,6 @@ async function fetchLiveData() {
 
     recomputeStandings();
     renderMatchList();
-    if (currentTab === 'brackets') renderBrackets();
     checkPolling();
     dismissSplash();
 
@@ -640,6 +639,7 @@ async function fetchLiveData() {
     });
     if (scorerTargets.length) {
       await Promise.all(scorerTargets.map(fetchMatchScorers));
+      recomputeStandings();
       renderMatchList();
     }
   } catch (e) {
@@ -1074,7 +1074,7 @@ function renderMatchList() {
   list.style.height = '';
   list.style.overflow = '';
   if (currentTab === 'brackets') {
-    list.innerHTML = '<div class="empty-state">Bracket available after group stage</div>';
+    renderBrackets();
     return;
   }
 
