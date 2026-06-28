@@ -1332,23 +1332,26 @@ const BRACKET_ROUNDS = [
   ]},
 ];
 
-// Maps each R16+ match to the two predecessor match IDs that feed its slots
+// Maps each R16+ match to the two predecessor match IDs that feed its slots.
+// Follows the official FIFA 2026 bracket (non-sequential). Code IDs are in
+// date order; mapped to FIFA match numbers (73-104) by venue, then wired per
+// the published bracket. FIFA match # shown in comments.
 const BRACKET_PREDECESSORS = {
-  'r16-1': ['r32-1',  'r32-2'],
-  'r16-2': ['r32-3',  'r32-4'],
-  'r16-3': ['r32-5',  'r32-6'],
-  'r16-4': ['r32-7',  'r32-8'],
-  'r16-5': ['r32-9',  'r32-10'],
-  'r16-6': ['r32-11', 'r32-12'],
-  'r16-7': ['r32-13', 'r32-14'],
-  'r16-8': ['r32-15', 'r32-16'],
-  'qf-1':  ['r16-1',  'r16-2'],
-  'qf-2':  ['r16-3',  'r16-4'],
-  'qf-3':  ['r16-5',  'r16-6'],
-  'qf-4':  ['r16-7',  'r16-8'],
-  'sf-1':  ['qf-1',   'qf-2'],
-  'sf-2':  ['qf-3',   'qf-4'],
-  'fin-1': ['sf-1',   'sf-2'],
+  'r16-1': ['r32-1',  'r32-4'],   // M90: W73 vs W75
+  'r16-2': ['r32-3',  'r32-6'],   // M89: W74 vs W77
+  'r16-3': ['r32-2',  'r32-5'],   // M91: W76 vs W78
+  'r16-4': ['r32-7',  'r32-8'],   // M92: W79 vs W80
+  'r16-5': ['r32-12', 'r32-11'],  // M93: W83 vs W84
+  'r16-6': ['r32-10', 'r32-9'],   // M94: W81 vs W82
+  'r16-7': ['r32-15', 'r32-14'],  // M95: W86 vs W88
+  'r16-8': ['r32-13', 'r32-16'],  // M96: W85 vs W87
+  'qf-1':  ['r16-2',  'r16-1'],   // M97: W89 vs W90
+  'qf-2':  ['r16-5',  'r16-6'],   // M98: W93 vs W94
+  'qf-3':  ['r16-3',  'r16-4'],   // M99: W91 vs W92
+  'qf-4':  ['r16-7',  'r16-8'],   // M100: W95 vs W96
+  'sf-1':  ['qf-1',   'qf-2'],    // M101: W97 vs W98
+  'sf-2':  ['qf-3',   'qf-4'],    // M102: W99 vs W100
+  'fin-1': ['sf-1',   'sf-2'],    // M104: W101 vs W102
 };
 
 // Returns all projected team names that could come out of a given match
@@ -1768,7 +1771,22 @@ function renderBracketTree() {
   const isFirst = bracketTreePair === 0;
   const isLast  = bracketTreePair === TREE_PAIRS.length - 1;
 
-  const colsHtml = pair.map(({ key, label, matches }) => {
+  // Order the left (feeder) column so each right-column match's two feeders sit
+  // adjacent and centered on their child — keeps bracket connectors from crossing.
+  const [leftRound, rightRound] = pair;
+  const feederOrder = [];
+  rightRound.matches.forEach(rm => {
+    (BRACKET_PREDECESSORS[rm.id] || []).forEach(pid => feederOrder.push(pid));
+  });
+  const leftMatches = feederOrder.length
+    ? feederOrder.map(id => leftRound.matches.find(m => m.id === id)).filter(Boolean)
+    : leftRound.matches;
+  const orderedPair = [
+    { ...leftRound,  matches: leftMatches },
+    rightRound,
+  ];
+
+  const colsHtml = orderedPair.map(({ key, label, matches }) => {
     const slots = matches.map(m =>
       `<div class="btree-slot" data-match-id="${m.id}">${bracketCardTreeHtml({ ...m, round: label })}</div>`
     ).join('');
