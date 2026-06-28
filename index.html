@@ -312,8 +312,8 @@
     </div>
     <div id="error-banner" class="error-banner">Having trouble connecting — retrying</div>
     <div class="tabs">
-      <div class="tab active" data-tab="group-phase">Group Phase</div>
-      <div class="tab" data-tab="brackets">Brackets</div>
+      <div class="tab active" data-tab="brackets">Brackets</div>
+      <div class="tab" data-tab="group-phase">Group Phase</div>
     </div>
   </div>
   <div class="chips-wrap" id="group-chips"></div>
@@ -742,7 +742,7 @@ function formatScorerSide(list) {
 }
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
-let currentTab = 'group-phase';
+let currentTab = 'brackets';
 let currentGroup = 'UPCOMING';
 let bracketFilter = 'upcoming';
 let bracketView = 'list'; // 'list' | 'columns' | 'tree'
@@ -1471,16 +1471,32 @@ function isPositionConfirmed(pos, grp) {
   return true;
 }
 
-// Returns the confirmed team for a label like "1st Group E", or null if not yet locked in
+// True once every group has played all 3 matchdays (group stage complete)
+function isGroupStageComplete() {
+  return 'ABCDEFGHIJKL'.split('').every(g => {
+    const rows = STANDINGS[g];
+    return rows && rows.length >= 4 && rows.every(t => t.p === 3);
+  });
+}
+
+// Returns the confirmed team for a label like "1st Group E" or "3rd Best #1",
+// or null if not yet locked in
 function getConfirmedTeam(label) {
   const m = label && label.match(/^(\d+)(?:st|nd|rd|th) Group ([A-L])$/);
-  if (!m) return null;
-  const pos = parseInt(m[1], 10);
-  const grp = m[2];
-  const rows = STANDINGS[grp];
-  if (!rows || rows.length < pos) return null;
-  if (!isPositionConfirmed(pos, grp)) return null;
-  return rows[pos - 1].name;
+  if (m) {
+    const pos = parseInt(m[1], 10);
+    const grp = m[2];
+    const rows = STANDINGS[grp];
+    if (!rows || rows.length < pos) return null;
+    if (!isPositionConfirmed(pos, grp)) return null;
+    return rows[pos - 1].name;
+  }
+  // Third-place qualifier slots resolve once the group stage is fully complete
+  if (/^3rd Best #\d+$/.test(label || '')) {
+    if (!isGroupStageComplete()) return null;
+    return getProjectedTeam(label);
+  }
+  return null;
 }
 
 function getProjectedTeam(label) {
@@ -1994,9 +2010,10 @@ document.querySelectorAll('.tab').forEach(el => {
 
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-renderChips();
-  renderTeamChips();
-  renderMatchList();
+document.getElementById('group-chips').style.display = 'none';
+document.getElementById('team-chips').style.display = 'none';
+renderBracketChips();
+renderBrackets();
 setInterval(tickCountdowns, 1000);
 window.addEventListener('resize', () => {
   if (currentTab === 'brackets' && bracketView === 'tree') drawBracketConnectors();
