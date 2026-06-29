@@ -493,6 +493,8 @@ const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fet
 const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
 const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
 const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
+const BRACKET_RESOLVED = {}; // bracket matchId → { home, away } actual team names (live wiring)
+const BRACKET_WINNERS  = {}; // bracket matchId → advancing team name (from played knockout games)
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -523,6 +525,60 @@ function recomputeStandings() {
   }
 }
 
+// Wires played/scheduled knockout games to bracket slots so scores show and
+// winners advance. Matches each slot to an actual ESPN event by its known
+// team(s); for third-place slots the opponent in the real game fills the slot.
+function resolveBracket(espnEvents) {
+  for (const k in BRACKET_RESOLVED) delete BRACKET_RESOLVED[k];
+  for (const k in BRACKET_WINNERS)  delete BRACKET_WINNERS[k];
+  const used = new Set();
+  const dayOf = d => d ? new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(new Date(d)) : null;
+
+  const knownTeam = (m, side) => {
+    const explicit = side === 'home' ? m.team1 : m.team2;
+    if (explicit) return explicit;
+    const preds = BRACKET_PREDECESSORS[m.id];
+    if (preds) return BRACKET_WINNERS[side === 'home' ? preds[0] : preds[1]] || null;
+    const label = side === 'home' ? m.label1 : m.label2;
+    // 1st/2nd group slots are deterministic; third-place slots are filled from
+    // the opponent in the actual game (avoids guessing the FIFA allocation).
+    return /^(\d+)(?:st|nd|rd|th) Group [A-L]$/.test(label || '') ? getConfirmedTeam(label) : null;
+  };
+
+  for (const round of BRACKET_ROUNDS) {
+    for (const m of round.matches) {
+      let home = knownTeam(m, 'home');
+      let away = knownTeam(m, 'away');
+      const known = [home, away].filter(Boolean);
+      if (!known.length) continue;
+
+      let ev = null;
+      if (known.length === 2) {
+        ev = espnEvents.find(e => !used.has(e.id) && e.teams.includes(home) && e.teams.includes(away));
+      } else {
+        // Third-place slot: match the known team's game on this match's date so
+        // we never pick up a group-stage game that shares the team.
+        const kt = known[0];
+        const dayKey = dayOf(m.date);
+        ev = dayKey && espnEvents.find(e => !used.has(e.id) && e.teams.includes(kt) && e.dayKey === dayKey);
+      }
+
+      if (ev) {
+        used.add(ev.id);
+        if (!home) home = ev.teams.find(t => t !== away);
+        if (!away) away = ev.teams.find(t => t !== home);
+        BRACKET_RESOLVED[m.id] = { home, away };
+        RESULTS[m.id]     = { hs: ev.score[home] ?? 0, as: ev.score[away] ?? 0 };
+        ESPN_STATES[m.id] = ev.state;
+        if (ev.state === 'in') CLOCKS[m.id] = ev.clock; else delete CLOCKS[m.id];
+        if (ev.state === 'post' && ev.winner) BRACKET_WINNERS[m.id] = ev.winner;
+      } else {
+        BRACKET_RESOLVED[m.id] = { home: home || null, away: away || null };
+      }
+    }
+  }
+}
+
 function computeBestThirdSet() {
   const thirds = [];
   for (const g of 'ABCDEFGHIJKL'.split('')) {
@@ -550,13 +606,16 @@ function setErrorBanner(show) {
 
 function checkPolling() {
   const now = Date.now();
-  const anyActive = MATCHES.some(m => {
-    const espn = ESPN_STATES[m.id];
+  const isActive = (id, startMs) => {
+    const espn = ESPN_STATES[id];
     if (espn === 'post') return false;                          // ESPN confirmed done
     if (espn === 'in')   return true;                           // ESPN confirmed live
-    const start = m.kickoff.getTime();
-    return now >= start && now < start + 130 * 60 * 1000;      // kickoff reached, not yet expired
-  });
+    if (startMs == null) return false;
+    return now >= startMs && now < startMs + 130 * 60 * 1000;   // kickoff reached, not yet expired
+  };
+  const anyActive =
+    MATCHES.some(m => isActive(m.id, m.kickoff.getTime())) ||
+    BRACKET_ROUNDS.flatMap(r => r.matches).some(m => isActive(m.id, m.date ? new Date(m.date).getTime() : null));
   setLiveDot(anyActive);
   if (anyActive && !pollHandle) {
     pollHandle = setInterval(fetchLiveData, 30000);
@@ -581,7 +640,7 @@ function dismissSplash() {
 
 async function fetchLiveData() {
   try {
-    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260627&limit=200');
+    const res = await fetch('https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/scoreboard?dates=20260611-20260719&limit=300');
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
 
@@ -590,15 +649,30 @@ async function fetchLiveData() {
     const el = document.getElementById('last-updated');
     if (el) el.textContent = 'Last updated: ' + new Intl.DateTimeFormat(navigator.language, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(new Date());
 
+    const espnEvents = []; // normalized index of every event (used to wire the bracket)
     for (const event of (data.events || [])) {
       const comp  = event.competitions[0];
       const state = comp.status.type.state;
       const homeC = comp.competitors.find(c => c.homeAway === 'home');
       const awayC = comp.competitors.find(c => c.homeAway === 'away');
       if (!homeC || !awayC) continue;
+
+      // Normalize for bracket wiring (covers knockout games not in MATCHES)
+      const hName = mapEspnName(homeC.team.displayName);
+      const aName = mapEspnName(awayC.team.displayName);
+      const evDate = new Date(event.date || comp.date);
+      espnEvents.push({
+        id: event.id,
+        dayKey: isNaN(evDate) ? null : new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(evDate),
+        teams: [hName, aName],
+        score: { [hName]: parseInt(homeC.score) || 0, [aName]: parseInt(awayC.score) || 0 },
+        winner: homeC.winner ? hName : awayC.winner ? aName : null,
+        state,
+        clock: comp.status.type.shortDetail || null,
+      });
+
       const match = MATCHES.find(m =>
-        m.home === mapEspnName(homeC.team.displayName) &&
-        m.away === mapEspnName(awayC.team.displayName)
+        m.home === hName && m.away === aName
       );
       if (!match) continue;
       ESPN_EVENT_IDS[match.id] = event.id;
@@ -626,6 +700,7 @@ async function fetchLiveData() {
     }
 
     recomputeStandings();
+    resolveBracket(espnEvents);
     renderMatchList();
     checkPolling();
     dismissSplash();
@@ -1341,6 +1416,10 @@ const BRACKET_PREDECESSORS = {
 
 // Returns all projected team names that could come out of a given match
 function getMatchCandidatesAll(matchId) {
+  // Once a game is decided/scheduled, collapse to the actual team(s)
+  if (BRACKET_WINNERS[matchId]) return [BRACKET_WINNERS[matchId]];
+  const resolved = BRACKET_RESOLVED[matchId];
+  if (resolved && resolved.home && resolved.away) return [resolved.home, resolved.away];
   const preds = BRACKET_PREDECESSORS[matchId];
   if (!preds) {
     const match = BRACKET_ROUNDS.flatMap(r => r.matches).find(m => m.id === matchId);
@@ -1544,8 +1623,9 @@ function slotHtml(team, label, side, candidates) {
 }
 
 function bracketCardHtml(m) {
-  const team1 = m.team1 || getConfirmedTeam(m.label1);
-  const team2 = m.team2 || getConfirmedTeam(m.label2);
+  const rr = BRACKET_RESOLVED[m.id] || {};
+  const team1 = rr.home || m.team1 || getConfirmedTeam(m.label1);
+  const team2 = rr.away || m.team2 || getConfirmedTeam(m.label2);
   const kickoff = m.date ? new Date(m.date) : null;
   const result = RESULTS[m.id];
   const isLive = !!CLOCKS[m.id];
@@ -1576,8 +1656,9 @@ function bracketCardHtml(m) {
 
 // Compact vertical card for the tree view — teams stacked top/bottom
 function bracketCardTreeHtml(m) {
-  const team1   = m.team1 || getConfirmedTeam(m.label1);
-  const team2   = m.team2 || getConfirmedTeam(m.label2);
+  const rr      = BRACKET_RESOLVED[m.id] || {};
+  const team1   = rr.home || m.team1 || getConfirmedTeam(m.label1);
+  const team2   = rr.away || m.team2 || getConfirmedTeam(m.label2);
   const kickoff = m.date ? new Date(m.date) : null;
   const dateStr = kickoff ? fmtDate.format(kickoff) : 'TBD';
   const timeStr = kickoff ? fmtTime.format(kickoff) : '';
@@ -1678,8 +1759,9 @@ function attachBracketCardListeners(container) {
       const roundEntry = BRACKET_ROUNDS.find(r => r.matches.some(x => x.id === el.dataset.bcalId));
       const bm = roundEntry?.matches.find(x => x.id === el.dataset.bcalId);
       if (!bm || !bm.date) return;
-      const t1 = bm.team1 || getConfirmedTeam(bm.label1);
-      const t2 = bm.team2 || getConfirmedTeam(bm.label2);
+      const rr = BRACKET_RESOLVED[bm.id] || {};
+      const t1 = rr.home || bm.team1 || getConfirmedTeam(bm.label1);
+      const t2 = rr.away || bm.team2 || getConfirmedTeam(bm.label2);
       if (t1 && t2) downloadBracketICS({ ...bm, round: roundEntry.label }, t1, t2);
     });
   });
