@@ -1831,7 +1831,16 @@ function renderBracketList() {
   const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, { weekday:'long', month:'long', day:'numeric', timeZone: LOCAL_TZ });
   let html = '';
 
-  const hasPast = BRACKET_ROUNDS.flatMap(r => r.matches).some(m => m.date && new Date(m.date) < Date.now());
+  // A game is "past" only once it's completed — live games stay in Upcoming.
+  const isBracketPast = m => {
+    const s = ESPN_STATES[m.id];
+    if (s === 'post') return true;
+    if (s === 'in')   return false;
+    // No ESPN state yet: fall back to time (kickoff + 3h elapsed ≈ finished)
+    return m.date ? (new Date(m.date).getTime() + 3 * 60 * 60 * 1000) < Date.now() : false;
+  };
+
+  const hasPast = BRACKET_ROUNDS.flatMap(r => r.matches).some(isBracketPast);
   if (hasPast) {
     html += `<div class="group-fixture-chips">
       <div class="chip upcoming-chip ${bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
@@ -1840,10 +1849,9 @@ function renderBracketList() {
   }
 
   BRACKET_ROUNDS.forEach(({ label, matches }) => {
-    const filtered = matches.map(m => ({ ...m, round: label })).filter(m => {
-      const isPast = m.date && new Date(m.date) < Date.now();
-      return bracketFilter === 'past' ? isPast : !isPast;
-    });
+    const filtered = matches.map(m => ({ ...m, round: label })).filter(m =>
+      bracketFilter === 'past' ? isBracketPast(m) : !isBracketPast(m)
+    );
     if (!filtered.length) return;
 
     html += `<div class="round-header">${label}</div>`;
