@@ -567,12 +567,14 @@ function resolveBracket(espnEvents) {
 
       if (ev) {
         used.add(ev.id);
-        if (!home) home = ev.teams.find(t => t !== away);
-        if (!away) away = ev.teams.find(t => t !== home);
+        // Only fill an unknown slot if the opponent is a real team — future-round
+        // fixtures list a placeholder opponent that must not override candidates.
+        if (!home) { const c = ev.teams.find(t => t !== away); home = TEAMS[c] ? c : null; }
+        if (!away) { const c = ev.teams.find(t => t !== home); away = TEAMS[c] ? c : null; }
         BRACKET_RESOLVED[m.id] = { home, away };
         ESPN_STATES[m.id]   = ev.state;
         ESPN_EVENT_IDS[m.id] = ev.id;
-        if (ev.state === 'in' || ev.state === 'post') {
+        if ((ev.state === 'in' || ev.state === 'post') && home && away) {
           RESULTS[m.id] = { hs: ev.score[home] ?? 0, as: ev.score[away] ?? 0 };
           // Orient ESPN competitors to the bracket's home/away slots
           const espHome = ev.comp.competitors.find(c => c.homeAway === 'home');
@@ -1832,8 +1834,8 @@ function renderBracketList() {
   const hasPast = BRACKET_ROUNDS.flatMap(r => r.matches).some(m => m.date && new Date(m.date) < Date.now());
   if (hasPast) {
     html += `<div class="group-fixture-chips">
-      <div class="chip ${bracketFilter === 'upcoming' ? 'active' : ''}" data-bf="upcoming">Upcoming</div>
-      <div class="chip ${bracketFilter === 'past' ? 'active' : ''}" data-bf="past">Past</div>
+      <div class="chip upcoming-chip ${bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
+      <div class="chip past-chip ${bracketFilter === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>
     </div>`;
   }
 
