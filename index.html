@@ -850,28 +850,13 @@ function teamFlag(name) { return TEAMS[name]?.flag || '🏳️'; }
 // ─── RENDER CHIPS ────────────────────────────────────────────────────────────
 function renderBracketChips() {
   const wrap = document.getElementById('group-chips');
-  const allMatches = BRACKET_ROUNDS.flatMap(r => r.matches);
-  const hasPast = allMatches.some(m => m.date && new Date(m.date) < Date.now());
   wrap.style.display = 'flex';
-
-  const filterChips = (bracketView === 'list' && hasPast) ? `
-    <div class="chip ${bracketFilter === 'upcoming' ? 'active' : ''}" data-bf="upcoming">Upcoming</div>
-    <div class="chip ${bracketFilter === 'past' ? 'active' : ''}" data-bf="past">Past</div>` : '';
 
   wrap.innerHTML = `
     <div class="chip ${bracketView === 'list' ? 'active' : ''}" data-bv="list">List</div>
     <div class="chip ${bracketView === 'columns' ? 'active' : ''}" data-bv="columns">Columns</div>
-    <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>
-    ${filterChips}`;
+    <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>`;
 
-  wrap.querySelectorAll('[data-bf]').forEach(el =>
-    el.addEventListener('click', () => {
-      if (el.dataset.bf === bracketFilter) return;
-      bracketFilter = el.dataset.bf;
-      renderBracketChips();
-      renderBrackets();
-    })
-  );
   wrap.querySelectorAll('[data-bv]').forEach(el =>
     el.addEventListener('click', () => {
       if (el.dataset.bv === bracketView) return;
@@ -1562,18 +1547,21 @@ function bracketCardHtml(m) {
   const team1 = m.team1 || getConfirmedTeam(m.label1);
   const team2 = m.team2 || getConfirmedTeam(m.label2);
   const kickoff = m.date ? new Date(m.date) : null;
-  const timeStr = kickoff ? fmtTime.format(kickoff) : 'TBD';
+  const result = RESULTS[m.id];
+  const isLive = !!CLOCKS[m.id];
+  const hasScore = result != null;
+  const timeStr = isLive ? `<span class="live-dot"></span>${CLOCKS[m.id]}` : hasScore ? 'FT' : (kickoff ? fmtTime.format(kickoff) : 'TBD');
   const cands1 = !team1 ? getSlotCandidates(m.id, 'home') : null;
   const cands2 = !team2 ? getSlotCandidates(m.id, 'away') : null;
   return `
     <div class="match-card" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
       <div class="card-top">
         <span class="card-group">${m.showDate ? (kickoff ? fmtDate.format(kickoff) : 'Date TBD') : m.round}</span>
-        <span class="card-time">${timeStr}</span>
+        <span class="card-time${isLive ? ' live' : hasScore ? ' done' : ''}">${timeStr}</span>
       </div>
       <div class="card-teams">
         <div class="ct-home">${slotHtml(team1, m.label1, 'home', cands1)}</div>
-        <span class="ct-vs">vs</span>
+        <span class="ct-vs${isLive ? ' live' : hasScore ? ' done' : ''}">${hasScore ? `${result.hs} – ${result.as}` : 'vs'}</span>
         <div class="ct-away">${slotHtml(team2, m.label2, 'away', cands2)}</div>
       </div>
       <div class="card-bottom">
@@ -1719,6 +1707,14 @@ function renderBracketList() {
   const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, { weekday:'long', month:'long', day:'numeric', timeZone: LOCAL_TZ });
   let html = '';
 
+  const hasPast = BRACKET_ROUNDS.flatMap(r => r.matches).some(m => m.date && new Date(m.date) < Date.now());
+  if (hasPast) {
+    html += `<div class="group-fixture-chips">
+      <div class="chip ${bracketFilter === 'upcoming' ? 'active' : ''}" data-bf="upcoming">Upcoming</div>
+      <div class="chip ${bracketFilter === 'past' ? 'active' : ''}" data-bf="past">Past</div>
+    </div>`;
+  }
+
   BRACKET_ROUNDS.forEach(({ label, matches }) => {
     const filtered = matches.map(m => ({ ...m, round: label })).filter(m => {
       const isPast = m.date && new Date(m.date) < Date.now();
@@ -1743,6 +1739,14 @@ function renderBracketList() {
   });
 
   list.innerHTML = html;
+  list.querySelectorAll('[data-bf]').forEach(el =>
+    el.addEventListener('click', e => {
+      e.stopPropagation();
+      if (el.dataset.bf === bracketFilter) return;
+      bracketFilter = el.dataset.bf;
+      renderBracketList();
+    })
+  );
   attachBracketCardListeners(list);
 }
 
