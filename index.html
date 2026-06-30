@@ -575,7 +575,9 @@ function resolveBracket(espnEvents) {
         ESPN_STATES[m.id]   = ev.state;
         ESPN_EVENT_IDS[m.id] = ev.id;
         if ((ev.state === 'in' || ev.state === 'post') && home && away) {
-          RESULTS[m.id] = { hs: ev.score[home] ?? 0, as: ev.score[away] ?? 0 };
+          const hsp = ev.shootout[home], asp = ev.shootout[away];
+          RESULTS[m.id] = { hs: ev.score[home] ?? 0, as: ev.score[away] ?? 0,
+            ...(hsp != null && asp != null ? { hsp, asp } : {}) };
           // Orient ESPN competitors to the bracket's home/away slots
           const espHome = ev.comp.competitors.find(c => c.homeAway === 'home');
           const espAway = ev.comp.competitors.find(c => c.homeAway === 'away');
@@ -683,6 +685,10 @@ async function fetchLiveData() {
         dayKey: isNaN(evDate) ? null : new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(evDate),
         teams: [hName, aName],
         score: { [hName]: parseInt(homeC.score) || 0, [aName]: parseInt(awayC.score) || 0 },
+        shootout: {
+          [hName]: homeC.shootoutScore != null ? parseInt(homeC.shootoutScore) : null,
+          [aName]: awayC.shootoutScore != null ? parseInt(awayC.shootoutScore) : null,
+        },
         winner: homeC.winner ? hName : awayC.winner ? aName : null,
         state,
         clock: comp.status.type.shortDetail || null,
@@ -776,7 +782,7 @@ function parseScorersFromComp(m, comp, homeC, awayC) {
     SCORERS[m.id] = { home, away };
     // Details update on ESPN before the aggregate score fields — sync score forward
     const cur = RESULTS[m.id] || { hs: 0, as: 0 };
-    RESULTS[m.id] = { hs: Math.max(cur.hs, home.length), as: Math.max(cur.as, away.length) };
+    RESULTS[m.id] = { ...cur, hs: Math.max(cur.hs, home.length), as: Math.max(cur.as, away.length) };
     if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
   }
 }
@@ -1676,7 +1682,7 @@ function bracketCardHtml(m) {
       ${breakLabel ? `<div class="card-break">${breakLabel}</div>` : ''}
       <div class="card-teams">
         <div class="ct-home">${slotHtml(team1, m.label1, 'home', cands1)}</div>
-        <span class="ct-vs${isLive ? ' live' : isDone ? ' done' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0} – ${result?.as ?? 0}` : 'vs'}</span>
+        <span class="ct-vs${isLive ? ' live' : isDone ? ' done' : ''}">${(isDone || isLive) ? `${result?.hs ?? 0}${result?.hsp != null ? ` (${result.hsp})` : ''} – ${result?.as ?? 0}${result?.asp != null ? ` (${result.asp})` : ''}` : 'vs'}</span>
         <div class="ct-away">${slotHtml(team2, m.label2, 'away', cands2)}</div>
       </div>
       ${(homeScorers || awayScorers) ? `
@@ -1706,8 +1712,8 @@ function bracketCardTreeHtml(m) {
   const isLive  = !!CLOCKS[m.id];
   const isDone  = ESPN_STATES[m.id] === 'post' || (!isLive && result != null);
   const timeStr = isLive ? `<span class="live-dot"></span>${CLOCKS[m.id]}` : isDone ? 'FT' : (kickoff ? fmtTime.format(kickoff) : '');
-  const score1  = result != null ? result.hs : null;
-  const score2  = result != null ? result.as : null;
+  const score1  = result != null ? `${result.hs}${result.hsp != null ? ` (${result.hsp})` : ''}` : null;
+  const score2  = result != null ? `${result.as}${result.asp != null ? ` (${result.asp})` : ''}` : null;
 
   const slotRow = (team, label, isHome, score) => {
     if (team) {
