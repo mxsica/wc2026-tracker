@@ -757,6 +757,16 @@ async function fetchLiveData() {
   }
 }
 
+// A penalty-shootout kick is reported by ESPN as a scoring play (period 5),
+// but it is NOT a goal — exclude it from the goalscorer list and the score.
+function isShootoutPlay(p) {
+  const period = p?.period?.number ?? (typeof p?.period === 'number' ? p.period : null);
+  if (period != null && period > 4) return true;
+  if (p?.shootout === true || p?.penaltyShootout === true) return true;
+  const txt = `${p?.type?.text || ''} ${p?.type?.name || ''} ${p?.text || ''}`.toLowerCase();
+  return txt.includes('shootout') || txt.includes('penalty shoot');
+}
+
 // Parse scorers from the scoreboard competition object (inline details).
 // This uses data we already fetch successfully — no extra CORS-bound request.
 function parseScorersFromComp(m, comp, homeC, awayC) {
@@ -766,7 +776,7 @@ function parseScorersFromComp(m, comp, homeC, awayC) {
   const awayId = awayC.team?.id;
   const home = [], away = [];
   for (const d of details) {
-    if (!d.scoringPlay) continue;
+    if (!d.scoringPlay || isShootoutPlay(d)) continue;
     const tid = d.team?.id;
     const side = tid === homeId ? home : tid === awayId ? away : null;
     if (!side) continue;
@@ -780,9 +790,12 @@ function parseScorersFromComp(m, comp, homeC, awayC) {
   }
   if (home.length || away.length) {
     SCORERS[m.id] = { home, away };
-    // Details update on ESPN before the aggregate score fields — sync score forward
+    // Details update on ESPN before the aggregate score fields — sync score
+    // forward. Skip for shootout games so the regulation score isn't inflated.
     const cur = RESULTS[m.id] || { hs: 0, as: 0 };
-    RESULTS[m.id] = { ...cur, hs: Math.max(cur.hs, home.length), as: Math.max(cur.as, away.length) };
+    if (cur.hsp == null) {
+      RESULTS[m.id] = { ...cur, hs: Math.max(cur.hs, home.length), as: Math.max(cur.as, away.length) };
+    }
     if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
   }
 }
@@ -812,6 +825,7 @@ async function fetchMatchScorers(m, homeName = m.home, awayName = m.away) {
 
     const home = [], away = [];
     for (const play of plays) {
+      if (isShootoutPlay(play)) continue; // penalty shootout kicks aren't goals
       const tid  = play.team?.id;
       const tnam = mapEspnName(play.team?.displayName || '');
       // Match by ID when available, fall back to display-name mapping
@@ -1854,9 +1868,13 @@ function renderBracketList() {
     </div>`;
   }
 
-  BRACKET_ROUNDS.forEach(({ label, matches }) => {
+  // Past view reads newest → oldest: reverse rounds, dates, and games within a date
+  const isPastView = bracketFilter === 'past';
+  const rounds = isPastView ? [...BRACKET_ROUNDS].reverse() : BRACKET_ROUNDS;
+
+  rounds.forEach(({ label, matches }) => {
     const filtered = matches.map(m => ({ ...m, round: label })).filter(m =>
-      bracketFilter === 'past' ? isBracketPast(m) : !isBracketPast(m)
+      isPastView ? isBracketPast(m) : !isBracketPast(m)
     );
     if (!filtered.length) return;
 
@@ -1869,10 +1887,13 @@ function renderBracketList() {
       byDate[key].push(m);
     });
 
-    Object.keys(byDate).sort().forEach(key => {
+    const keys = Object.keys(byDate).sort();
+    if (isPastView) keys.reverse();
+    keys.forEach(key => {
       const dateLabel = key === 'tbd' ? 'Date TBD' : fmtDayHeader.format(new Date(key + 'T12:00:00'));
       html += `<div class="date-header">${dateLabel}</div>`;
-      byDate[key].forEach(m => { html += bracketCardHtml(m); });
+      const games = isPastView ? [...byDate[key]].reverse() : byDate[key];
+      games.forEach(m => { html += bracketCardHtml(m); });
     });
   });
 
