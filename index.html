@@ -574,6 +574,7 @@ function resolveBracket(espnEvents) {
         BRACKET_RESOLVED[m.id] = { home, away };
         ESPN_STATES[m.id]   = ev.state;
         ESPN_EVENT_IDS[m.id] = ev.id;
+        if (ev.date) m.date = ev.date; // ESPN kickoff is authoritative (reflects delays/reschedules)
         if ((ev.state === 'in' || ev.state === 'post') && home && away) {
           const hsp = ev.shootout[home], asp = ev.shootout[away];
           RESULTS[m.id] = { hs: ev.score[home] ?? 0, as: ev.score[away] ?? 0,
@@ -682,6 +683,7 @@ async function fetchLiveData() {
       const evDate = new Date(event.date || comp.date);
       espnEvents.push({
         id: event.id,
+        date: event.date || comp.date || null,
         dayKey: isNaN(evDate) ? null : new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(evDate),
         teams: [hName, aName],
         score: { [hName]: parseInt(homeC.score) || 0, [aName]: parseInt(awayC.score) || 0 },
