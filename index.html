@@ -1162,6 +1162,12 @@ function renderBracketCountryChips() {
       renderBrackets();
     })
   );
+
+  // Keep the selected country visible in the (scrollable) chip row
+  if (bracketTeamFilter) {
+    const active = wrap.querySelector(`[data-bcountry="${bracketTeamFilter}"]`);
+    if (active) active.scrollIntoView({ inline: 'center', block: 'nearest' });
+  }
 }
 
 function renderTeamChips() {
@@ -2000,7 +2006,18 @@ function attachBracketCardListeners(container) {
       const t = card.classList.contains('btcard')
         ? (e.clientY < rect.top + rect.height / 2 ? card.dataset.bteam1 : card.dataset.bteam2)
         : (e.clientX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2);
-      if (t && TEAMS[t]) selectTeam(t);
+      if (!t || !TEAMS[t]) return;
+      if (currentTab === 'brackets') {
+        // Select that country's pill on the bracket section (stay in brackets)
+        bracketTeamFilter = t;
+        if (bracketView === 'tree') bracketView = 'list'; // pill row is hidden in tree
+        if (bracketView === 'columns') bracketColsResetScroll = true;
+        renderBracketChips();
+        renderBrackets();
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      } else {
+        selectTeam(t);
+      }
     });
   });
 
