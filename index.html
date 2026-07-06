@@ -701,7 +701,7 @@ async function fetchLiveData() {
         winner: homeC.winner ? hName : awayC.winner ? aName : null,
         state,
         clock: comp.status.type.shortDetail || null,
-        statusName: (comp.status.type.name || '') + ' ' + (comp.status.type.description || ''),
+        statusName: [comp.status.type.name, comp.status.type.description, comp.status.type.detail].filter(Boolean).join(' '),
         comp, hName, aName,
       });
 
@@ -720,7 +720,7 @@ async function fetchLiveData() {
       if (state === 'in') {
         RESULTS[match.id]      = { hs: parseInt(homeC.score) || 0, as: parseInt(awayC.score) || 0 };
         CLOCKS[match.id]       = comp.status.type.shortDetail || null;
-        STATUS_NAMES[match.id] = (comp.status.type.name || '') + ' ' + (comp.status.type.description || '');
+        STATUS_NAMES[match.id] = [comp.status.type.name, comp.status.type.description, comp.status.type.detail].filter(Boolean).join(' ');
         console.log('[live]', match.home, 'vs', match.away, '| shortDetail:', comp.status.type.shortDetail, '| name:', comp.status.type.name, '| desc:', comp.status.type.description, '| detail:', comp.status.type.detail, '| statusFull:', JSON.stringify(comp.status.type));
         parseScorersFromComp(match, comp, homeC, awayC);
       } else if (state === 'post') {
@@ -917,10 +917,10 @@ function formatScorerSide(list) {
     .join('<br>');
 }
 
-// Bookings for one side: "🟨 Name 45'" / "🟥 Name 78'" (yellow first, then red)
+// Bookings for one side, sorted by match minute: "🟨 Name 45'" / "🟥 Name 78'"
 function formatCardSide(list, align) {
   if (!list?.length) return '';
-  const order = [...list].sort((a, b) => (a.red === b.red) ? 0 : a.red ? 1 : -1);
+  const order = [...list].sort((a, b) => (parseInt(a.min) || 0) - (parseInt(b.min) || 0));
   return order.map(c => {
     const sq = `<span class="card-chip ${c.red ? 'red' : 'yellow'}"></span>`;
     return align === 'away'
