@@ -935,6 +935,7 @@ let currentGroup = 'UPCOMING';
 let bracketFilter = 'upcoming';
 let bracketView = 'list'; // 'list' | 'columns' | 'tree'
 let bracketTreePair = 0;
+let bracketTeamFilter = null; // country filter for bracket views (team name or null)
 let currentTeamFilter = null;
 let groupFixtureFilter = 'upcoming';
 let currentStadium = null;
@@ -1051,6 +1052,51 @@ function renderBracketChips() {
       bracketView = el.dataset.bv;
       if (bracketView === 'tree') bracketTreePair = 0;
       renderBracketChips();
+      renderBrackets();
+    })
+  );
+}
+
+// The two resolved/confirmed teams (or nulls) for a bracket match
+function bracketMatchTeams(m) {
+  const rr = BRACKET_RESOLVED[m.id] || {};
+  return [
+    rr.home || m.team1 || getConfirmedTeam(m.label1),
+    rr.away || m.team2 || getConfirmedTeam(m.label2),
+  ];
+}
+
+// Unique, alphabetically-sorted list of teams currently known to be in the bracket
+function getBracketTeams() {
+  const set = new Set();
+  BRACKET_ROUNDS.forEach(r => r.matches.forEach(m => {
+    bracketMatchTeams(m).forEach(t => { if (t && TEAMS[t]) set.add(t); });
+  }));
+  return [...set].sort((a, b) => a.localeCompare(b));
+}
+
+// Country filter chips (only teams in the bracket). Shown in list/columns views.
+function renderBracketCountryChips() {
+  const wrap = document.getElementById('team-chips');
+  const teams = getBracketTeams();
+  if (bracketView === 'tree' || !teams.length) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+  // Drop a stale filter if that team is no longer in the bracket
+  if (bracketTeamFilter && !teams.includes(bracketTeamFilter)) bracketTeamFilter = null;
+  wrap.style.display = 'flex';
+  wrap.style.paddingTop = '0';
+  wrap.innerHTML =
+    `<div class="chip ${!bracketTeamFilter ? 'active' : ''}" data-bcountry="">All</div>` +
+    teams.map(name => `<div class="chip ${bracketTeamFilter === name ? 'active' : ''}" data-bcountry="${name}">${TEAMS[name].flag} ${name}</div>`).join('');
+
+  wrap.querySelectorAll('[data-bcountry]').forEach(el =>
+    el.addEventListener('click', () => {
+      const name = el.dataset.bcountry || null;
+      bracketTeamFilter = (name === bracketTeamFilter) ? null : name;
+      renderBracketCountryChips();
       renderBrackets();
     })
   );
@@ -1861,6 +1907,7 @@ function bracketCardTreeHtml(m) {
 
 // ─── RENDER BRACKETS ─────────────────────────────────────────────────────────
 function renderBrackets() {
+  renderBracketCountryChips();
   if (bracketView === 'columns') renderBracketColumns();
   else if (bracketView === 'tree') renderBracketTree();
   else renderBracketList();
@@ -1940,8 +1987,12 @@ function renderBracketList() {
     return m.date ? (new Date(m.date).getTime() + 3 * 60 * 60 * 1000) < Date.now() : false;
   };
 
+  // Country filter shows that team's full path (all rounds, chronological) and
+  // hides the Upcoming/Past split.
+  const teamFilterActive = !!bracketTeamFilter;
+
   const hasPast = BRACKET_ROUNDS.flatMap(r => r.matches).some(isBracketPast);
-  if (hasPast) {
+  if (hasPast && !teamFilterActive) {
     html += `<div class="group-fixture-chips">
       <div class="chip upcoming-chip ${bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
       <div class="chip past-chip ${bracketFilter === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>
@@ -1949,13 +2000,14 @@ function renderBracketList() {
   }
 
   // Past view reads newest → oldest: reverse rounds, dates, and games within a date
-  const isPastView = bracketFilter === 'past';
+  const isPastView = !teamFilterActive && bracketFilter === 'past';
   const rounds = isPastView ? [...BRACKET_ROUNDS].reverse() : BRACKET_ROUNDS;
 
   rounds.forEach(({ label, matches }) => {
-    const filtered = matches.map(m => ({ ...m, round: label })).filter(m =>
-      isPastView ? isBracketPast(m) : !isBracketPast(m)
-    );
+    const filtered = matches.map(m => ({ ...m, round: label })).filter(m => {
+      if (teamFilterActive) return bracketMatchTeams(m).includes(bracketTeamFilter);
+      return isPastView ? isBracketPast(m) : !isBracketPast(m);
+    });
     if (!filtered.length) return;
 
     html += `<div class="round-header">${label}</div>`;
@@ -1995,8 +2047,13 @@ function renderBracketColumns() {
   list.style.height = 'calc(100dvh - 130px)';
   list.style.overflow = 'hidden';
 
+  const teamFilterActive = !!bracketTeamFilter;
   const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
-    const slots = matches.map(m =>
+    const shown = teamFilterActive
+      ? matches.filter(m => bracketMatchTeams(m).includes(bracketTeamFilter))
+      : matches;
+    if (teamFilterActive && !shown.length) return ''; // hide rounds the team isn't in
+    const slots = shown.map(m =>
       `<div class="btree-slot" data-match-id="${m.id}">${bracketCardHtml({ ...m, round: label, showDate: true })}</div>`
     ).join('');
     return `<div class="btree-col" data-round="${key}">
