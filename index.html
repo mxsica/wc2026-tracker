@@ -1053,17 +1053,30 @@ function renderBracketChips() {
     el.addEventListener('click', () => {
       if (el.dataset.bv === bracketView) return;
       bracketView = el.dataset.bv;
-      if (bracketView === 'tree') bracketTreePair = 0;
+      if (bracketView === 'tree') bracketTreePair = treePairForFilter();
       renderBracketChips();
       renderBrackets();
     })
   );
 }
 
-// Upcoming/Past filter — its own (third) row; shown in list/columns, hidden in tree
+// Index of the earliest round that still has an unplayed game (the current phase)
+function currentPhaseRoundIndex() {
+  for (let i = 0; i < BRACKET_ROUNDS.length; i++) {
+    if (BRACKET_ROUNDS[i].matches.some(m => !isBracketPast(m))) return i;
+  }
+  return BRACKET_ROUNDS.length - 1;
+}
+
+// Tree carousel pair to land on for the current filter: past → start, upcoming → current phase
+function treePairForFilter() {
+  if (bracketFilter === 'past') return 0;
+  return Math.min(currentPhaseRoundIndex(), TREE_PAIRS.length - 1);
+}
+
+// Upcoming/Past — its own (third) row; shown in all three views
 function renderBracketFilterChips() {
   const wrap = document.getElementById('bracket-filter-chips');
-  if (bracketView === 'tree') { wrap.style.display = 'none'; wrap.innerHTML = ''; return; }
   wrap.style.display = 'flex';
   wrap.innerHTML = `
     <div class="chip upcoming-chip ${bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
@@ -1072,6 +1085,8 @@ function renderBracketFilterChips() {
     el.addEventListener('click', () => {
       if (el.dataset.bf === bracketFilter) return;
       bracketFilter = el.dataset.bf;
+      // Tree doesn't filter — it navigates the carousel to the relevant phase
+      if (bracketView === 'tree') bracketTreePair = treePairForFilter();
       renderBracketFilterChips();
       renderBrackets();
     })
