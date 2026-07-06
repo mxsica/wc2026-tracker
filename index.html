@@ -328,7 +328,6 @@
   </div>
   <div class="chips-wrap" id="group-chips"></div>
   <div class="chips-wrap" id="team-chips" style="padding-top:0"></div>
-  <div class="chips-wrap" id="bracket-filter-chips" style="padding-top:0;display:none"></div>
   <div class="match-list" id="match-list"></div>
 </div>
 
@@ -939,6 +938,7 @@ let bracketFilter = 'upcoming';
 let bracketView = 'list'; // 'list' | 'columns' | 'tree'
 let bracketTreePair = 0;
 let bracketTeamFilter = null; // country filter for bracket views (team name or null)
+let bracketColsResetScroll = true; // columns: reset scroll to the current phase on next render
 let currentTeamFilter = null;
 let groupFixtureFilter = 'upcoming';
 let currentStadium = null;
@@ -1040,11 +1040,31 @@ function filterMatches() {
 function teamFlag(name) { return TEAMS[name]?.flag || '🏳️'; }
 
 // ─── RENDER CHIPS ────────────────────────────────────────────────────────────
+// Deepest round whose games are all fully defined (both teams known) — the
+// current "front" of the bracket. Falls back to the first round.
+function landingRoundIndex() {
+  let idx = 0;
+  BRACKET_ROUNDS.forEach((r, i) => {
+    if (r.matches.every(m => { const [a, b] = bracketMatchTeams(m); return a && b; })) idx = i;
+  });
+  return idx;
+}
+
+// Tree carousel pair to land on for the current filter: past → start, else → the front
+function treePairForFilter() {
+  if (bracketFilter === 'past') return 0;
+  return Math.min(landingRoundIndex(), TREE_PAIRS.length - 1);
+}
+
 function renderBracketChips() {
   const wrap = document.getElementById('group-chips');
   wrap.style.display = 'flex';
 
+  // Upcoming/Past are inactive while a country is selected (country view ignores them)
+  const filterOn = !bracketTeamFilter;
   wrap.innerHTML = `
+    <div class="chip upcoming-chip ${filterOn && bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
+    <div class="chip past-chip ${filterOn && bracketFilter === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>
     <div class="chip ${bracketView === 'list' ? 'active' : ''}" data-bv="list">List</div>
     <div class="chip ${bracketView === 'columns' ? 'active' : ''}" data-bv="columns">Columns</div>
     <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>`;
@@ -1054,40 +1074,19 @@ function renderBracketChips() {
       if (el.dataset.bv === bracketView) return;
       bracketView = el.dataset.bv;
       if (bracketView === 'tree') bracketTreePair = treePairForFilter();
+      if (bracketView === 'columns') bracketColsResetScroll = true;
       renderBracketChips();
       renderBrackets();
     })
   );
-}
-
-// Index of the earliest round that still has an unplayed game (the current phase)
-function currentPhaseRoundIndex() {
-  for (let i = 0; i < BRACKET_ROUNDS.length; i++) {
-    if (BRACKET_ROUNDS[i].matches.some(m => !isBracketPast(m))) return i;
-  }
-  return BRACKET_ROUNDS.length - 1;
-}
-
-// Tree carousel pair to land on for the current filter: past → start, upcoming → current phase
-function treePairForFilter() {
-  if (bracketFilter === 'past') return 0;
-  return Math.min(currentPhaseRoundIndex(), TREE_PAIRS.length - 1);
-}
-
-// Upcoming/Past — its own (third) row; shown in all three views
-function renderBracketFilterChips() {
-  const wrap = document.getElementById('bracket-filter-chips');
-  wrap.style.display = 'flex';
-  wrap.innerHTML = `
-    <div class="chip upcoming-chip ${bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
-    <div class="chip past-chip ${bracketFilter === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>`;
   wrap.querySelectorAll('[data-bf]').forEach(el =>
     el.addEventListener('click', () => {
-      if (el.dataset.bf === bracketFilter) return;
+      // Clicking a filter exits the country view and applies the filter
+      bracketTeamFilter = null;
       bracketFilter = el.dataset.bf;
-      // Tree doesn't filter — it navigates the carousel to the relevant phase
       if (bracketView === 'tree') bracketTreePair = treePairForFilter();
-      renderBracketFilterChips();
+      if (bracketView === 'columns') bracketColsResetScroll = true;
+      renderBracketChips();
       renderBrackets();
     })
   );
@@ -1157,6 +1156,8 @@ function renderBracketCountryChips() {
     el.addEventListener('click', () => {
       const name = el.dataset.bcountry || null;
       bracketTeamFilter = (name === bracketTeamFilter) ? null : name;
+      if (bracketView === 'columns') bracketColsResetScroll = true;
+      renderBracketChips();        // refresh Upcoming/Past active state
       renderBracketCountryChips();
       renderBrackets();
     })
@@ -1194,7 +1195,6 @@ function renderTeamChips() {
 
 
 function renderChips() {
-  document.getElementById('bracket-filter-chips').style.display = 'none';
   const wrap = document.getElementById('group-chips');
   wrap.style.display = 'flex';
   const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
@@ -1970,7 +1970,6 @@ function bracketCardTreeHtml(m) {
 // ─── RENDER BRACKETS ─────────────────────────────────────────────────────────
 function renderBrackets() {
   renderBracketCountryChips();
-  renderBracketFilterChips();
   if (bracketView === 'columns') renderBracketColumns();
   else if (bracketView === 'tree') renderBracketTree();
   else renderBracketList();
@@ -2041,17 +2040,33 @@ function renderBracketList() {
   const fmtDayHeader = new Intl.DateTimeFormat(navigator.language, { weekday:'long', month:'long', day:'numeric', timeZone: LOCAL_TZ });
   let html = '';
 
-  const teamFilterActive = !!bracketTeamFilter;
+  // Country view: ignore Upcoming/Past — show the team's whole path, next
+  // (not-yet-played) game first, then the rest backwards in time.
+  if (bracketTeamFilter) {
+    const games = [];
+    BRACKET_ROUNDS.forEach(({ label, matches }) => matches.forEach(m => {
+      if (bracketMatchTeams(m).includes(bracketTeamFilter)) games.push({ ...m, round: label });
+    }));
+    const t = m => m.date ? new Date(m.date).getTime() : 0;
+    const notPast = games.filter(m => !isBracketPast(m)).sort((a, b) => t(a) - t(b));
+    const past    = games.filter(m => isBracketPast(m)).sort((a, b) => t(b) - t(a));
+    [...notPast, ...past].forEach(m => {
+      html += `<div class="round-header">${m.round}</div>`;
+      html += bracketCardHtml(m);
+    });
+    list.innerHTML = html;
+    attachBracketCardListeners(list);
+    return;
+  }
 
   // Past view reads newest → oldest: reverse rounds, dates, and games within a date
   const isPastView = bracketFilter === 'past';
   const rounds = isPastView ? [...BRACKET_ROUNDS].reverse() : BRACKET_ROUNDS;
 
   rounds.forEach(({ label, matches }) => {
-    const filtered = matches.map(m => ({ ...m, round: label })).filter(m => {
-      if (teamFilterActive && !bracketMatchTeams(m).includes(bracketTeamFilter)) return false;
-      return isPastView ? isBracketPast(m) : !isBracketPast(m);
-    });
+    const filtered = matches.map(m => ({ ...m, round: label })).filter(m =>
+      isPastView ? isBracketPast(m) : !isBracketPast(m)
+    );
     if (!filtered.length) return;
 
     html += `<div class="round-header">${label}</div>`;
@@ -2083,13 +2098,16 @@ function renderBracketColumns() {
   list.style.height = 'calc(100dvh - 130px)';
   list.style.overflow = 'hidden';
 
+  // Columns shows the full bracket (no Upcoming/Past filtering); the country
+  // filter, when set, narrows to that team's rounds.
   const teamFilterActive = !!bracketTeamFilter;
+  const prevScroll = document.getElementById('btree-wrap')?.scrollLeft || 0;
+
   const colsHtml = BRACKET_ROUNDS.map(({ key, label, matches }) => {
-    const shown = matches.filter(m => {
-      if (teamFilterActive && !bracketMatchTeams(m).includes(bracketTeamFilter)) return false;
-      return bracketFilter === 'past' ? isBracketPast(m) : !isBracketPast(m);
-    });
-    if (!shown.length) return ''; // hide rounds with nothing to show under the current filter
+    const shown = teamFilterActive
+      ? matches.filter(m => bracketMatchTeams(m).includes(bracketTeamFilter))
+      : matches;
+    if (!shown.length) return '';
     const slots = shown.map(m =>
       `<div class="btree-slot" data-match-id="${m.id}">${bracketCardHtml({ ...m, round: label, showDate: true })}</div>`
     ).join('');
@@ -2104,6 +2122,22 @@ function renderBracketColumns() {
   </div>`;
 
   attachBracketCardListeners(list);
+
+  // Scroll position: land on the current phase (or Past→start) on fresh entry;
+  // otherwise preserve the user's scroll across background re-renders.
+  const wrapEl = document.getElementById('btree-wrap');
+  if (bracketColsResetScroll) {
+    bracketColsResetScroll = false;
+    const targetKey = bracketFilter === 'past'
+      ? BRACKET_ROUNDS[0].key
+      : BRACKET_ROUNDS[landingRoundIndex()].key;
+    requestAnimationFrame(() => {
+      const col = wrapEl.querySelector(`.btree-col[data-round="${targetKey}"]`);
+      if (col) wrapEl.scrollLeft += col.getBoundingClientRect().left - wrapEl.getBoundingClientRect().left - 16;
+    });
+  } else {
+    wrapEl.scrollLeft = prevScroll;
+  }
 }
 
 // Overlapping pairs: each round appears as right col of one slide and left col of next
@@ -2238,7 +2272,6 @@ function drawBracketConnectors() {
 function renderStadiums() {
   document.getElementById('group-chips').style.display = 'none';
   document.getElementById('team-chips').style.display = 'none';
-  document.getElementById('bracket-filter-chips').style.display = 'none';
   const list = document.getElementById('match-list');
 
   const stMatches = MATCHES.filter(m => m.venue === currentStadium);
@@ -2339,6 +2372,8 @@ document.querySelectorAll('.tab').forEach(el => {
     if (currentTab === 'brackets') {
       document.getElementById('group-chips').style.display = 'none';
       document.getElementById('team-chips').style.display = 'none';
+      if (bracketView === 'columns') bracketColsResetScroll = true;
+      if (bracketView === 'tree') bracketTreePair = treePairForFilter();
       renderBracketChips(); renderBrackets();
     } else {
       renderChips(); renderTeamChips(); renderMatchList();
