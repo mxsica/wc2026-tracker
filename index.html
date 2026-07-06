@@ -130,6 +130,12 @@
   .card-scorers { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; margin-bottom: 10px; font-size: 12px; color: var(--text); line-height: 1.6; }
   .card-scorers-home { max-width: 50%; }
   .card-scorers-away { text-align: right; max-width: 50%; }
+  .card-cards { display: flex; justify-content: space-between; gap: 8px; margin-top: 2px; margin-bottom: 10px; font-size: 11px; color: var(--text3); line-height: 1.7; }
+  .card-cards-home { max-width: 50%; }
+  .card-cards-away { text-align: right; max-width: 50%; }
+  .card-chip { display: inline-block; width: 8px; height: 11px; border-radius: 1.5px; vertical-align: -1px; }
+  .card-chip.yellow { background: #eab308; }
+  .card-chip.red { background: #dc2626; }
   .card-bottom { display: flex; justify-content: space-between; align-items: center; }
   .card-bottom-right { display: flex; align-items: center; gap: 6px; }
   .card-venue { font-size: 12px; color: var(--text3); }
@@ -493,6 +499,7 @@ const STANDINGS      = {};
 const CLOCKS         = {}; // matchId → ESPN displayClock string for live games
 const ESPN_EVENT_IDS = {}; // matchId → ESPN numeric event id (for summary fetches)
 const SCORERS        = {}; // matchId → { home: [{name,minute}], away: [{name,minute}] }
+const CARDS          = {}; // matchId → { home: [{name,min,red}], away: [{name,min,red}] }
 const SCORER_DONE    = new Set(); // completed matchIds whose scorers are already cached
 const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
 const BRACKET_RESOLVED = {}; // bracket matchId → { home, away } actual team names (live wiring)
@@ -769,27 +776,51 @@ function isShootoutPlay(p) {
   return txt.includes('shootout') || txt.includes('penalty shoot');
 }
 
-// Parse scorers from the scoreboard competition object (inline details).
-// This uses data we already fetch successfully — no extra CORS-bound request.
+// Classify a play/detail as a booking: 'red' (straight red or 2nd yellow),
+// 'yellow', or null if it isn't a card event.
+function cardTypeOf(p) {
+  const txt = `${p?.type?.text || p?.type?.name || p?.text || ''}`.toLowerCase();
+  if (!txt.includes('card')) return null;
+  if (txt.includes('red') || txt.includes('second yellow') || txt.includes('yellow-red') || txt.includes('yellow red')) return 'red';
+  if (txt.includes('yellow')) return 'yellow';
+  return null;
+}
+
+function playClockMin(p) {
+  const rawMin = p?.clock?.displayValue || '';
+  return rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
+}
+
+// Parse scorers and cards from the scoreboard competition object (inline
+// details). Uses data we already fetch — no extra CORS-bound request.
 function parseScorersFromComp(m, comp, homeC, awayC) {
   const details = comp.details;
   if (!Array.isArray(details) || !details.length) return; // leave for summary fallback
   const homeId = homeC.team?.id;
   const awayId = awayC.team?.id;
   const home = [], away = [];
+  const hCards = [], aCards = [];
   for (const d of details) {
-    if (!d.scoringPlay || isShootoutPlay(d)) continue;
     const tid = d.team?.id;
+    const ct = cardTypeOf(d);
+    if (ct) {
+      const cs = tid === homeId ? hCards : tid === awayId ? aCards : null;
+      if (!cs) continue;
+      const ca = (d.athletesInvolved && d.athletesInvolved[0]) || null;
+      const cn = (ca?.shortName || ca?.displayName || '').split(' ').pop();
+      if (cn) cs.push({ name: cn, min: playClockMin(d), red: ct === 'red' });
+      continue;
+    }
+    if (!d.scoringPlay || isShootoutPlay(d)) continue;
     const side = tid === homeId ? home : tid === awayId ? away : null;
     if (!side) continue;
     const ath  = (d.athletesInvolved && d.athletesInvolved[0]) || null;
     const raw  = ath?.shortName || ath?.displayName || '';
     const name = raw.split(' ').pop();
     if (!name) continue;
-    const rawMin = d.clock?.displayValue || '';
-    const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
-    side.push({ name, min });
+    side.push({ name, min: playClockMin(d) });
   }
+  if (hCards.length || aCards.length) CARDS[m.id] = { home: hCards, away: aCards };
   if (home.length || away.length) {
     SCORERS[m.id] = { home, away };
     // Details update on ESPN before the aggregate score fields — sync score
@@ -849,6 +880,25 @@ async function fetchMatchScorers(m, homeName = m.home, awayName = m.away) {
       if (name) side.push({ name, min });
     }
     SCORERS[m.id] = { home, away };
+
+    // Cards: scan key events / all plays for bookings
+    const sideOf = play => {
+      const tid = play.team?.id, tnam = mapEspnName(play.team?.displayName || '');
+      if ((homeTeamId && tid === homeTeamId) || (!homeTeamId && tnam === homeName)) return 'home';
+      if ((awayTeamId && tid === awayTeamId) || (!awayTeamId && tnam === awayName)) return 'away';
+      return null;
+    };
+    const hCards = [], aCards = [];
+    for (const play of (data.keyEvents || data.plays || [])) {
+      const ct = cardTypeOf(play);
+      if (!ct) continue;
+      const cs = sideOf(play) === 'home' ? hCards : sideOf(play) === 'away' ? aCards : null;
+      if (!cs) continue;
+      const ath = play.participants?.[0]?.athlete ?? play.athlete;
+      const cn = (ath?.shortName || ath?.displayName || '').split(' ').pop();
+      if (cn) cs.push({ name: cn, min: playClockMin(play), red: ct === 'red' });
+    }
+    if (hCards.length || aCards.length) CARDS[m.id] = { home: hCards, away: aCards };
     if (ESPN_STATES[m.id] === 'post') SCORER_DONE.add(m.id);
   } catch (e) {
     console.warn('Scorer fetch failed', m.id, e);
@@ -865,6 +915,18 @@ function formatScorerSide(list) {
   return Object.entries(grouped)
     .map(([name, mins]) => `${name} ${mins.join(', ')}`)
     .join('<br>');
+}
+
+// Bookings for one side: "🟨 Name 45'" / "🟥 Name 78'" (yellow first, then red)
+function formatCardSide(list, align) {
+  if (!list?.length) return '';
+  const order = [...list].sort((a, b) => (a.red === b.red) ? 0 : a.red ? 1 : -1);
+  return order.map(c => {
+    const sq = `<span class="card-chip ${c.red ? 'red' : 'yellow'}"></span>`;
+    return align === 'away'
+      ? `${c.name} ${c.min} ${sq}`
+      : `${sq} ${c.name} ${c.min}`;
+  }).join('<br>');
 }
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
@@ -1147,6 +1209,9 @@ function cardHtml(m) {
   const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
   const homeScorers = formatScorerSide(scorerData?.home);
   const awayScorers = formatScorerSide(scorerData?.away);
+  const cardData    = (isLive || isDone) ? CARDS[m.id] : null;
+  const homeCards   = formatCardSide(cardData?.home, 'home');
+  const awayCards   = formatCardSide(cardData?.away, 'away');
   return `
     <div class="match-card" data-id="${m.id}" data-home="${m.home}" data-away="${m.away}">
       <div class="card-top">
@@ -1169,6 +1234,11 @@ function cardHtml(m) {
       <div class="card-scorers">
         <div class="card-scorers-home">${homeScorers}</div>
         <div class="card-scorers-away">${awayScorers}</div>
+      </div>` : ''}
+      ${(homeCards || awayCards) ? `
+      <div class="card-cards">
+        <div class="card-cards-home">${homeCards}</div>
+        <div class="card-cards-away">${awayCards}</div>
       </div>` : ''}
       <div class="card-bottom">
         <span class="card-venue">${groupVenueLabel(m.city, m.venue)}</span>
@@ -1686,6 +1756,9 @@ function bracketCardHtml(m) {
   const scorerData  = (isLive || isDone) ? SCORERS[m.id] : null;
   const homeScorers = formatScorerSide(scorerData?.home);
   const awayScorers = formatScorerSide(scorerData?.away);
+  const cardData    = (isLive || isDone) ? CARDS[m.id] : null;
+  const homeCards   = formatCardSide(cardData?.home, 'home');
+  const awayCards   = formatCardSide(cardData?.away, 'away');
   const daysLeft = kickoff ? Math.ceil((kickoff - Date.now()) / 86400000) : null;
   const cands1 = !team1 ? getSlotCandidates(m.id, 'home') : null;
   const cands2 = !team2 ? getSlotCandidates(m.id, 'away') : null;
@@ -1705,6 +1778,11 @@ function bracketCardHtml(m) {
       <div class="card-scorers">
         <div class="card-scorers-home">${homeScorers}</div>
         <div class="card-scorers-away">${awayScorers}</div>
+      </div>` : ''}
+      ${(homeCards || awayCards) ? `
+      <div class="card-cards">
+        <div class="card-cards-home">${homeCards}</div>
+        <div class="card-cards-away">${awayCards}</div>
       </div>` : ''}
       <div class="card-bottom">
         <span class="card-venue">${bracketVenueFull(m.venue)}</span>
