@@ -603,6 +603,7 @@ function resolveBracket(espnEvents) {
       } else {
         BRACKET_RESOLVED[m.id] = { home: home || null, away: away || null };
         delete RESULTS[m.id];
+        delete CLOCKS[m.id];
       }
     }
   }
@@ -681,7 +682,9 @@ async function fetchLiveData() {
     const espnEvents = []; // normalized index of every event (used to wire the bracket)
     for (const event of (data.events || [])) {
       const comp  = event.competitions[0];
-      const state = comp.status.type.state;
+      // ESPN can keep a penalty-decided game in 'in' while flagging completed;
+      // treat completed as 'post' so it doesn't stay stuck on the live view.
+      const state = comp.status.type.completed ? 'post' : comp.status.type.state;
       const homeC = comp.competitors.find(c => c.homeAway === 'home');
       const awayC = comp.competitors.find(c => c.homeAway === 'away');
       if (!homeC || !awayC) continue;
