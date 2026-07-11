@@ -305,6 +305,74 @@
     font-size: 22px; font-weight: 700; letter-spacing: -0.5px;
     color: var(--text); display: flex; align-items: center; gap: 6px;
   }
+
+  /* MATCH DETAIL VIEW */
+  .md-wrap { padding: 0 16px 100px; animation: md-fade 0.25s ease; }
+  @keyframes md-fade { from { opacity: 0; } to { opacity: 1; } }
+  .md-top { display: flex; align-items: center; justify-content: space-between; padding: 12px 0 8px; }
+  .md-back { font-size: 15px; font-weight: 600; color: var(--text); cursor: pointer; }
+  .md-round { font-size: 13px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .md-section { margin-top: 22px; }
+  .md-section-label { font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text3); margin-bottom: 12px; }
+
+  /* Hero */
+  .md-hero { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 16px 18px; margin-top: 6px; }
+  .md-hero-teams { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .md-hero-team { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; }
+  .md-hero-flag { font-size: 46px; line-height: 1; }
+  .md-hero-name { font-size: 15px; font-weight: 700; color: var(--text); line-height: 1.2; }
+  .md-hero-center { flex-shrink: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 96px; padding-top: 8px; }
+  .md-score { font-size: 40px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -1px; }
+  .md-score-pen { font-size: 13px; font-weight: 600; color: var(--text3); }
+  .md-live-badge { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 700; color: var(--live); text-transform: uppercase; letter-spacing: 0.5px; }
+  .md-minute { font-size: 13px; font-weight: 600; color: var(--live); }
+  .md-final { font-size: 13px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: 0.5px; }
+  .md-countdown { font-size: 15px; font-weight: 700; color: var(--soon); }
+  .md-kickoff-time { font-size: 12px; color: var(--text3); }
+  .md-hero-meta { text-align: center; font-size: 12px; color: var(--text3); margin-top: 16px; line-height: 1.5; }
+
+  /* Goals */
+  .md-goals { display: flex; justify-content: space-between; gap: 12px; }
+  .md-goals-col { flex: 1; min-width: 0; font-size: 13px; color: var(--text); line-height: 1.8; }
+  .md-goals-col.away { text-align: right; }
+  .md-goal-note { color: var(--text3); font-size: 11px; }
+
+  /* Stats */
+  .md-stat { margin-bottom: 14px; }
+  .md-stat-head { display: flex; justify-content: space-between; align-items: center; font-size: 12px; margin-bottom: 5px; }
+  .md-stat-val { font-weight: 700; color: var(--text); font-variant-numeric: tabular-nums; }
+  .md-stat-name { color: var(--text3); font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; font-size: 11px; }
+  .md-stat-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--surface2); gap: 2px; }
+  .md-stat-bar > span { display: block; height: 100%; }
+  .md-stat-home { background: #1D9E75; border-radius: 3px 0 0 3px; }
+  .md-stat-away { background: var(--text3); border-radius: 0 3px 3px 0; }
+
+  /* Lineups / pitch */
+  .md-pitch { display: flex; gap: 12px; }
+  .md-pitch-col { flex: 1; min-width: 0; }
+  .md-pitch-team { font-size: 12px; font-weight: 700; color: var(--text2); margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .md-player { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--text); padding: 3px 0; line-height: 1.3; }
+  .md-player-num { color: var(--text3); font-size: 11px; min-width: 18px; font-variant-numeric: tabular-nums; }
+  .md-player-pos { color: var(--text3); font-size: 10px; margin-left: auto; }
+  .md-player.off .md-player-name { text-decoration: line-through; color: var(--text3); }
+  .md-player.red .md-player-name { color: var(--text3); }
+  .md-player-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #1D9E75; padding: 1px 0 3px 24px; }
+  .md-card-chip { display: inline-block; width: 8px; height: 11px; border-radius: 1.5px; vertical-align: -1px; }
+  .md-card-chip.yellow { background: #eab308; }
+  .md-card-chip.red { background: var(--live); }
+
+  /* Conditions */
+  .md-cond { display: flex; gap: 18px; align-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+  .md-cond-icon { font-size: 30px; line-height: 1; }
+  .md-cond-list { display: flex; gap: 18px; flex-wrap: wrap; }
+  .md-cond-item { display: flex; flex-direction: column; }
+  .md-cond-val { font-size: 16px; font-weight: 700; color: var(--text); }
+  .md-cond-key { font-size: 11px; color: var(--text3); text-transform: uppercase; letter-spacing: 0.3px; }
+
+  /* Advances */
+  .md-advances { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; font-size: 14px; color: var(--text); line-height: 1.5; }
+  .md-advances .md-adv-meta { color: var(--text3); font-size: 12px; margin-top: 3px; }
+  .md-muted { color: var(--text3); font-size: 13px; }
 </style>
 </head>
 <body>
@@ -741,6 +809,7 @@ async function fetchLiveData() {
     recomputeStandings();
     resolveBracket(espnEvents);
     renderMatchList();
+    if (detailMatch) fetchDetailSummary(); // refresh open detail view with live data
     checkPolling();
     dismissSplash();
 
@@ -947,6 +1016,10 @@ let groupFixtureFilter = 'upcoming';
 let currentStadium = null;
 let prevState = null;
 let timerHandle = null;
+let detailMatch = null;      // { id, isBracket, round } while the match detail view is open
+let detailSummary = null;    // cached ESPN summary for the open detail match
+let detailWeather = null;    // cached Open-Meteo weather for the open detail match
+let detailWeatherKey = null; // guards against refetching weather for the same match
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -1371,6 +1444,7 @@ function renderMatchList() {
   const list = document.getElementById('match-list');
   list.style.height = '';
   list.style.overflow = '';
+  if (detailMatch) { renderMatchDetail(); return; }
   if (currentTab === 'brackets') {
     renderBrackets();
     return;
@@ -1497,11 +1571,7 @@ function renderMatchList() {
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('[data-gff]') || e.target.closest('.card-cal-btn')) return;
-      const clickX = e.clientX;
-      const rect = card.getBoundingClientRect();
-      const relX = clickX - rect.left;
-      const teamName = relX < rect.width / 2 ? card.dataset.home : card.dataset.away;
-      selectTeam(teamName);
+      if (card.dataset.id) openMatchDetail(card.dataset.id, false);
     });
   });
 
@@ -1880,7 +1950,7 @@ function bracketCardHtml(m) {
   const cands1 = !team1 ? getSlotCandidates(m.id, 'home') : null;
   const cands2 = !team2 ? getSlotCandidates(m.id, 'away') : null;
   return `
-    <div class="match-card" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
+    <div class="match-card" data-match-id="${m.id}" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
       <div class="card-top">
         <span class="card-group">${m.showDate ? (kickoff ? fmtDate.format(kickoff) : 'Date TBD') : m.round}</span>
         <span class="card-time ${isLive ? 'live' : isDone ? 'done' : ''}">${isLive ? `<span class="live-dot"></span>${clock}` : isDone ? 'FT' : (kickoff ? fmtTime.format(kickoff) : 'TBD')}</span>
@@ -1962,7 +2032,7 @@ function bracketCardTreeHtml(m) {
     ? `<span class="btcard-cd">in ${daysLeft}d</span>` : '';
 
   return `
-    <div class="match-card btcard" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
+    <div class="match-card btcard" data-match-id="${m.id}" data-bteam1="${team1 || ''}" data-bteam2="${team2 || ''}" data-venue="${m.venue || ''}">
       <div class="btcard-top">
         <span class="btcard-date">${dateStr}</span>
         <span class="btcard-time${isLive ? ' live' : isDone ? ' done' : ''}">${timeStr}</span>
@@ -2002,25 +2072,8 @@ function attachBracketCardListeners(container) {
 
   container.querySelectorAll('.match-card[data-bteam1]').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('.card-venue') || e.target.closest('.card-cal-btn')) return;
-      const rect = card.getBoundingClientRect();
-      // Tree cards: teams are stacked vertically — use Y midpoint
-      // List cards: teams are side-by-side — use X midpoint
-      const t = card.classList.contains('btcard')
-        ? (e.clientY < rect.top + rect.height / 2 ? card.dataset.bteam1 : card.dataset.bteam2)
-        : (e.clientX < rect.left + rect.width / 2 ? card.dataset.bteam1 : card.dataset.bteam2);
-      if (!t || !TEAMS[t]) return;
-      if (currentTab === 'brackets') {
-        // Select that country's pill on the bracket section (stay in brackets)
-        bracketTeamFilter = t;
-        if (bracketView === 'tree') bracketView = 'list'; // pill row is hidden in tree
-        if (bracketView === 'columns') bracketColsResetScroll = true;
-        renderBracketChips();
-        renderBrackets();
-        window.scrollTo({ top: 0, behavior: 'instant' });
-      } else {
-        selectTeam(t);
-      }
+      if (e.target.closest('.card-venue') || e.target.closest('.card-cal-btn') || e.target.closest('.grp-link') || e.target.closest('[data-grp]')) return;
+      if (card.dataset.matchId) openMatchDetail(card.dataset.matchId, true);
     });
   });
 
@@ -2288,6 +2341,373 @@ function drawBracketConnectors() {
   svg.innerHTML = lines;
 }
 
+// ─── MATCH DETAIL VIEW ───────────────────────────────────────────────────────
+// Hardcoded coordinates for all 16 World Cup 2026 venues (keyed by stadium name)
+const VENUE_COORDS = {
+  'Estadio Azteca':          [19.3029, -99.1505],
+  'Estadio Akron':           [20.6819, -103.4626],
+  'Estadio BBVA':            [25.6693, -100.2444],
+  'Mercedes-Benz Stadium':   [33.7554, -84.4009],
+  'BMO Field':               [43.6332, -79.4185],
+  "Levi's Stadium":          [37.4030, -121.9698],
+  'SoFi Stadium':            [33.9535, -118.3392],
+  'NRG Stadium':             [29.6847, -95.4107],
+  'Gillette Stadium':        [42.0909, -71.2643],
+  'AT&T Stadium':            [32.7473, -97.0945],
+  'MetLife Stadium':         [40.8135, -74.0745],
+  'Lumen Field':             [47.5952, -122.3316],
+  'BC Place':                [49.2767, -123.1119],
+  'Hard Rock Stadium':       [25.9580, -80.2389],
+  'Arrowhead Stadium':       [39.0489, -94.4839],
+  'Lincoln Financial Field': [39.9008, -75.1675],
+};
+
+function stadiumName(venue) { return (venue || '').split(',')[0].trim(); }
+
+// WMO weather code → { label, icon }
+function wmoDesc(code) {
+  if (code == null) return { label: '—', icon: '🌡️' };
+  if (code === 0) return { label: 'Clear', icon: '☀️' };
+  if (code <= 3) return { label: 'Partly cloudy', icon: '⛅' };
+  if (code <= 48) return { label: 'Fog', icon: '🌫️' };
+  if (code <= 57) return { label: 'Drizzle', icon: '🌦️' };
+  if (code <= 67) return { label: 'Rain', icon: '🌧️' };
+  if (code <= 77) return { label: 'Snow', icon: '🌨️' };
+  if (code <= 82) return { label: 'Showers', icon: '🌧️' };
+  if (code <= 86) return { label: 'Snow showers', icon: '🌨️' };
+  return { label: 'Thunderstorm', icon: '⛈️' };
+}
+
+// Normalize a match (group or bracket) into a common shape for the detail view
+function getMatchInfo(id, isBracket) {
+  if (isBracket) {
+    const round = BRACKET_ROUNDS.find(r => r.matches.some(x => x.id === id));
+    const m = round?.matches.find(x => x.id === id);
+    if (!m) return null;
+    const [home, away] = bracketMatchTeams(m);
+    return {
+      id, isBracket: true, m, home, away,
+      kickoff: m.date ? new Date(m.date) : null,
+      venue: m.venue, city: (m.venue || '').split(',').slice(1).join(',').trim(),
+      round: round.label, eventId: ESPN_EVENT_IDS[id] || null,
+    };
+  }
+  const m = MATCHES.find(x => x.id === id);
+  if (!m) return null;
+  return {
+    id, isBracket: false, m, home: m.home, away: m.away,
+    kickoff: m.kickoff, venue: m.venue, city: m.city,
+    round: 'Group ' + m.group, eventId: ESPN_EVENT_IDS[id] || null,
+  };
+}
+
+function openMatchDetail(id, isBracket, round) {
+  prevState = prevState || { tab: currentTab, group: currentGroup, teamFilter: currentTeamFilter };
+  detailMatch = { id, isBracket, round };
+  detailSummary = null;
+  if (detailWeatherKey !== id) { detailWeather = null; detailWeatherKey = id; }
+  document.getElementById('group-chips').style.display = 'none';
+  document.getElementById('team-chips').style.display = 'none';
+  renderMatchDetail();
+  window.scrollTo({ top: 0, behavior: 'instant' });
+  fetchDetailSummary();
+  fetchDetailWeather();
+}
+
+function closeMatchDetail() {
+  detailMatch = null; detailSummary = null;
+  const st = prevState || { tab: 'brackets', group: 'UPCOMING', teamFilter: null };
+  prevState = null;
+  currentTab = st.tab;
+  currentGroup = st.group;
+  currentTeamFilter = st.teamFilter;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelector(`.tab[data-tab="${currentTab}"]`)?.classList.add('active');
+  if (currentTab === 'brackets') { renderBracketChips(); renderBrackets(); }
+  else { renderChips(); renderTeamChips(); renderMatchList(); }
+}
+
+async function fetchDetailSummary() {
+  const info = detailMatch && getMatchInfo(detailMatch.id, detailMatch.isBracket);
+  if (!info || !info.eventId) { renderMatchDetail(); return; }
+  const reqId = detailMatch.id;
+  try {
+    const res = await fetch(`https://site.api.espn.com/apis/site/v2/sports/soccer/fifa.world/summary?event=${info.eventId}`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (detailMatch && detailMatch.id === reqId) { detailSummary = data; renderMatchDetail(); }
+  } catch (e) { console.warn('detail summary failed', e); }
+}
+
+async function fetchDetailWeather() {
+  const info = detailMatch && getMatchInfo(detailMatch.id, detailMatch.isBracket);
+  if (!info) return;
+  const coords = VENUE_COORDS[stadiumName(info.venue)];
+  if (!coords) { renderMatchDetail(); return; }
+  const reqId = detailMatch.id;
+  const isDone = ESPN_STATES[info.id] === 'post';
+  const target = (isDone && info.kickoff) ? info.kickoff : new Date();
+  try {
+    if (!isDone) {
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&current=temperature_2m,relative_humidity_2m,weather_code&temperature_unit=fahrenheit`;
+      const res = await fetch(url); if (!res.ok) return;
+      const d = await res.json();
+      detailWeather = { temp: Math.round(d.current.temperature_2m), humidity: d.current.relative_humidity_2m, code: d.current.weather_code };
+    } else {
+      // Completed: pull the hourly value nearest kickoff
+      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(target);
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&hourly=temperature_2m,relative_humidity_2m,weather_code&temperature_unit=fahrenheit&timezone=UTC&start_date=${day}&end_date=${day}&past_days=32`;
+      const res = await fetch(url); if (!res.ok) return;
+      const d = await res.json();
+      const times = d.hourly?.time || [];
+      let bestI = 0, bestDiff = Infinity;
+      times.forEach((t, i) => { const diff = Math.abs(new Date(t + 'Z') - target); if (diff < bestDiff) { bestDiff = diff; bestI = i; } });
+      if (times.length) detailWeather = { temp: Math.round(d.hourly.temperature_2m[bestI]), humidity: d.hourly.relative_humidity_2m[bestI], code: d.hourly.weather_code[bestI] };
+    }
+    if (detailMatch && detailMatch.id === reqId) renderMatchDetail();
+  } catch (e) { console.warn('weather failed', e); }
+}
+
+// Which team side (home/away) an ESPN summary competitor/roster entry belongs to
+function summaryTeamId(side) {
+  const comps = detailSummary?.header?.competitions?.[0]?.competitors || [];
+  return comps.find(c => c.homeAway === side)?.team?.id || null;
+}
+
+function detailGoalsHtml(info) {
+  const plays = detailSummary?.scoringPlays
+    || (detailSummary?.plays || []).filter(p => p.scoringPlay);
+  if (!plays || !plays.length) return '';
+  const homeId = summaryTeamId('home'), awayId = summaryTeamId('away');
+  // Home/away in the summary may be swapped vs our slot order — map by name
+  const espHomeName = mapEspnName(detailSummary?.header?.competitions?.[0]?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '');
+  const homeIsInfoHome = espHomeName === info.home;
+  const home = [], away = [];
+  for (const p of plays) {
+    if (isShootoutPlay(p)) continue;
+    const txt = `${p.type?.text || ''} ${p.text || ''}`.toLowerCase();
+    const note = txt.includes('penalt') ? ' <span class="md-goal-note">(pen)</span>'
+      : txt.includes('own goal') || p.ownGoal ? ' <span class="md-goal-note">(og)</span>' : '';
+    const ath = p.participants?.find(x => x.type === 'scorer')?.athlete || p.participants?.[0]?.athlete || p.athlete;
+    const name = (ath?.shortName || ath?.displayName || '').split(' ').pop();
+    if (!name) continue;
+    const rawMin = p.clock?.displayValue || '';
+    const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
+    const espSide = p.team?.id === homeId ? 'espHome' : p.team?.id === awayId ? 'espAway' : null;
+    if (!espSide) continue;
+    const toHome = (espSide === 'espHome') === homeIsInfoHome;
+    (toHome ? home : away).push(`⚽ ${name} ${min}${note}`);
+  }
+  if (!home.length && !away.length) return '';
+  return `<div class="md-section"><div class="md-section-label">Goals</div>
+    <div class="md-goals">
+      <div class="md-goals-col">${home.join('<br>')}</div>
+      <div class="md-goals-col away">${away.join('<br>')}</div>
+    </div></div>`;
+}
+
+function detailStatsHtml(info) {
+  const teams = detailSummary?.boxscore?.teams;
+  if (!Array.isArray(teams) || teams.length < 2) return '';
+  const byName = {};
+  teams.forEach(t => { byName[mapEspnName(t.team?.displayName || '')] = t.statistics || []; });
+  const homeStats = byName[info.home], awayStats = byName[info.away];
+  if (!homeStats || !awayStats) return '';
+  const find = (stats, keys) => {
+    const s = stats.find(x => keys.some(k => (x.name || '').toLowerCase().includes(k) || (x.label || '').toLowerCase().includes(k)));
+    return s ? s.displayValue : null;
+  };
+  const rows = [
+    { label: 'Possession', keys: ['possession'], pct: true },
+    { label: 'Shots on target', keys: ['shotsontarget', 'shots on target'] },
+    { label: 'Passes completed', keys: ['passescompleted', 'accuratepasses', 'passes completed', 'totalpasses'] },
+    { label: 'Fouls', keys: ['foulscommitted', 'fouls'] },
+  ];
+  let html = '';
+  rows.forEach(r => {
+    const hv = find(homeStats, r.keys), av = find(awayStats, r.keys);
+    if (hv == null || av == null) return;
+    const hn = parseFloat(hv) || 0, an = parseFloat(av) || 0;
+    const total = hn + an;
+    const hpct = total ? (hn / total * 100) : 50;
+    html += `<div class="md-stat">
+      <div class="md-stat-head"><span class="md-stat-val">${hv}${r.pct ? '%' : ''}</span><span class="md-stat-name">${r.label}</span><span class="md-stat-val">${av}${r.pct ? '%' : ''}</span></div>
+      <div class="md-stat-bar"><span class="md-stat-home" style="width:${hpct}%"></span><span class="md-stat-away" style="width:${100 - hpct}%"></span></div>
+    </div>`;
+  });
+  return html ? `<div class="md-section"><div class="md-section-label">Match stats</div>${html}</div>` : '';
+}
+
+function detailPitchHtml(info) {
+  const rosters = detailSummary?.rosters;
+  if (!Array.isArray(rosters) || !rosters.length) return '';
+  const colFor = side => {
+    const r = rosters.find(x => x.homeAway === side);
+    const players = r?.roster || [];
+    if (!players.length) return null;
+    const starters = players.filter(p => p.starter);
+    if (!starters.length) return null;
+    let rows = '';
+    starters.forEach(p => {
+      const ath = p.athlete || {};
+      const name = (ath.shortName || ath.displayName || '').split(' ').pop();
+      const num = p.jersey || '';
+      const pos = p.position?.abbreviation || '';
+      const off = !!p.subbedOut;
+      const yellow = !!p.yellowCard, red = !!p.redCard;
+      const cardChip = red ? '<span class="md-card-chip red"></span>' : yellow ? '<span class="md-card-chip yellow"></span>' : '';
+      rows += `<div class="md-player ${off ? 'off' : ''} ${red ? 'red' : ''}">
+        <span class="md-player-num">${num}</span><span class="md-player-name">${name}</span>${cardChip}<span class="md-player-pos">${pos}</span></div>`;
+      // Player who came on for this starter
+      const inFor = players.find(q => q.subbedIn && (q.subbedInFor?.athlete?.id === ath.id || q.subbedForId === ath.id));
+      if (off) {
+        const on = inFor || null;
+        const onName = on ? (on.athlete?.shortName || on.athlete?.displayName || '').split(' ').pop() : '';
+        if (onName) rows += `<div class="md-player-sub">↑ ${onName}</div>`;
+      }
+    });
+    const teamName = side === 'home' ? info.home : info.away;
+    return `<div class="md-pitch-col"><div class="md-pitch-team">${TEAMS[teamName]?.flag || ''} ${teamName}</div>${rows}</div>`;
+  };
+  const h = colFor('home'), a = colFor('away');
+  if (!h || !a) return '';
+  return `<div class="md-section"><div class="md-section-label">On the pitch now</div>
+    <div class="md-pitch">${h}${a}</div></div>`;
+}
+
+// Starting XI (for upcoming, when ESPN has it) — simpler, no subs/cards
+function detailLineupHtml(info) {
+  const rosters = detailSummary?.rosters;
+  if (!Array.isArray(rosters) || !rosters.length) return '';
+  const colFor = side => {
+    const r = rosters.find(x => x.homeAway === side);
+    const starters = (r?.roster || []).filter(p => p.starter);
+    if (!starters.length) return null;
+    const rows = starters.map(p => {
+      const ath = p.athlete || {};
+      const name = (ath.shortName || ath.displayName || '').split(' ').pop();
+      return `<div class="md-player"><span class="md-player-num">${p.jersey || ''}</span><span class="md-player-name">${name}</span><span class="md-player-pos">${p.position?.abbreviation || ''}</span></div>`;
+    }).join('');
+    const teamName = side === 'home' ? info.home : info.away;
+    return `<div class="md-pitch-col"><div class="md-pitch-team">${TEAMS[teamName]?.flag || ''} ${teamName}</div>${rows}</div>`;
+  };
+  const h = colFor('home'), a = colFor('away');
+  if (!h || !a) return '';
+  return `<div class="md-section"><div class="md-section-label">Starting XI</div><div class="md-pitch">${h}${a}</div></div>`;
+}
+
+function detailAdvancesHtml(info) {
+  if (!info.isBracket) return '';
+  // Find the match this one feeds into
+  const childId = Object.keys(BRACKET_PREDECESSORS).find(k => BRACKET_PREDECESSORS[k].includes(info.id));
+  if (!childId) return ''; // Final
+  const round = BRACKET_ROUNDS.find(r => r.matches.some(x => x.id === childId));
+  const child = round?.matches.find(x => x.id === childId);
+  if (!child) return '';
+  const preds = BRACKET_PREDECESSORS[childId];
+  const otherId = preds.find(p => p !== info.id);
+  const oppWinner = BRACKET_WINNERS[otherId];
+  const dateStr = child.date ? fmtDate.format(new Date(child.date)) : 'TBD';
+  const venueCity = bracketVenueCity(child.venue);
+  let line;
+  if (oppWinner && TEAMS[oppWinner]) {
+    line = `<div>vs ${TEAMS[oppWinner].flag} ${oppWinner}</div>
+      <div class="md-adv-meta">${round.label} · ${dateStr} · ${venueCity}</div>`;
+  } else {
+    line = `<div>Winner advances to ${round.label}</div>
+      <div class="md-adv-meta">${dateStr} · ${venueCity}</div>`;
+  }
+  return `<div class="md-section"><div class="md-section-label">Winner advances to</div>
+    <div class="md-advances">${line}</div></div>`;
+}
+
+function detailConditionsHtml(info) {
+  const w = detailWeather;
+  const inner = w
+    ? (() => { const d = wmoDesc(w.code); return `
+        <div class="md-cond-icon">${d.icon}</div>
+        <div class="md-cond-list">
+          <div class="md-cond-item"><span class="md-cond-val">${w.temp}°F</span><span class="md-cond-key">Temp</span></div>
+          <div class="md-cond-item"><span class="md-cond-val">${w.humidity}%</span><span class="md-cond-key">Humidity</span></div>
+          <div class="md-cond-item"><span class="md-cond-val">${d.label}</span><span class="md-cond-key">Sky</span></div>
+        </div>`; })()
+    : `<div class="md-muted">Loading conditions…</div>`;
+  return `<div class="md-section"><div class="md-section-label">Conditions</div>
+    <div class="md-cond">${inner}</div></div>`;
+}
+
+function renderMatchDetail() {
+  if (!detailMatch) return;
+  const list = document.getElementById('match-list');
+  list.style.height = ''; list.style.overflow = ''; list.style.padding = '0';
+  const info = getMatchInfo(detailMatch.id, detailMatch.isBracket);
+  if (!info) { closeMatchDetail(); return; }
+
+  const result = RESULTS[info.id];
+  const isLive = !!CLOCKS[info.id];
+  const isDone = ESPN_STATES[info.id] === 'post';
+  const isUpcoming = !isLive && !isDone;
+
+  // Hero center
+  let center;
+  if (isUpcoming) {
+    const cd = info.kickoff ? countdownToKickoff(info.kickoff) : 'TBD';
+    center = `<div class="md-countdown">${cd}</div>
+      <div class="md-kickoff-time">${info.kickoff ? fmtTime.format(info.kickoff) : ''}</div>`;
+  } else {
+    const hs = result?.hs ?? 0, as = result?.as ?? 0;
+    const pens = result?.hsp != null ? `<div class="md-score-pen">(${result.hsp} – ${result.asp} pens)</div>` : '';
+    const status = isLive
+      ? `<div class="md-live-badge"><span class="live-dot"></span>Live</div><div class="md-minute">${CLOCKS[info.id] || ''}</div>`
+      : `<div class="md-final">Final</div>`;
+    center = `<div class="md-score">${hs} – ${as}</div>${pens}${status}`;
+  }
+
+  const metaBits = [info.venue ? stadiumName(info.venue) : '', info.city, info.kickoff ? fmtDate.format(info.kickoff) : ''].filter(Boolean);
+
+  let html = `<div class="md-wrap">
+    <div class="md-top">
+      <span class="md-back" id="md-back">← Back</span>
+      <span class="md-round">${info.round}</span>
+    </div>
+    <div class="md-hero">
+      <div class="md-hero-teams">
+        <div class="md-hero-team">
+          <span class="md-hero-flag">${info.home && TEAMS[info.home] ? TEAMS[info.home].flag : '🏳️'}</span>
+          <span class="md-hero-name">${info.home || 'TBD'}</span>
+        </div>
+        <div class="md-hero-center">${center}</div>
+        <div class="md-hero-team">
+          <span class="md-hero-flag">${info.away && TEAMS[info.away] ? TEAMS[info.away].flag : '🏳️'}</span>
+          <span class="md-hero-name">${info.away || 'TBD'}</span>
+        </div>
+      </div>
+      <div class="md-hero-meta">${metaBits.join(' · ')}</div>
+    </div>`;
+
+  if (!isUpcoming) {
+    html += detailGoalsHtml(info);
+    html += detailStatsHtml(info);
+  }
+  if (isLive) html += detailPitchHtml(info);
+  if (isUpcoming) html += detailLineupHtml(info);
+  html += detailConditionsHtml(info);
+  html += detailAdvancesHtml(info);
+  html += `</div>`;
+
+  list.innerHTML = html;
+  document.getElementById('md-back').addEventListener('click', closeMatchDetail);
+}
+
+function countdownToKickoff(date) {
+  const ms = date.getTime() - Date.now();
+  if (ms <= 0) return 'Kicking off';
+  const d = Math.floor(ms / 86400000), h = Math.floor((ms % 86400000) / 3600000), min = Math.floor((ms % 3600000) / 60000);
+  if (d > 0) return `in ${d}d ${h}h`;
+  if (h > 0) return `in ${h}h ${min}m`;
+  return `in ${min}m`;
+}
+
 // ─── STADIUMS VIEW ───────────────────────────────────────────────────────────
 function renderStadiums() {
   document.getElementById('group-chips').style.display = 'none';
@@ -2347,11 +2767,9 @@ function renderStadiums() {
 
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
-      if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('.card-cal-btn')) return;
-      const clickX = e.clientX;
-      const rect = card.getBoundingClientRect();
-      const teamName = clickX < rect.left + rect.width / 2 ? card.dataset.home : card.dataset.away;
-      selectTeam(teamName);
+      if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('.card-cal-btn') || e.target.closest('.grp-link') || e.target.closest('[data-grp]')) return;
+      if (card.dataset.id) openMatchDetail(card.dataset.id, false);
+      else if (card.dataset.matchId) openMatchDetail(card.dataset.matchId, true);
     });
   });
 
