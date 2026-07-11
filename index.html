@@ -1571,6 +1571,9 @@ function renderMatchList() {
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('[data-gff]') || e.target.closest('.card-cal-btn')) return;
+      // Tapping a team name/flag opens that team; elsewhere opens the match detail
+      if (e.target.closest('.ct-home')) { selectTeam(card.dataset.home); return; }
+      if (e.target.closest('.ct-away')) { selectTeam(card.dataset.away); return; }
       if (card.dataset.id) openMatchDetail(card.dataset.id, false);
     });
   });
@@ -1997,8 +2000,9 @@ function bracketCardTreeHtml(m) {
   const score2  = result != null ? `${result.as}${result.asp != null ? ` (${result.asp})` : ''}` : null;
 
   const slotRow = (team, label, isHome, score) => {
+    const sideClass = isHome ? 'btcard-team-home' : 'btcard-team-away';
     if (team) {
-      return `<div class="btcard-team">
+      return `<div class="btcard-team ${sideClass}">
         <span class="btcard-flag">${TEAMS[team]?.flag || ''}</span>
         <span class="btcard-name">${team}</span>
         ${score !== null ? `<span class="btcard-score">${score}</span>` : ''}
@@ -2020,7 +2024,7 @@ function bracketCardTreeHtml(m) {
         flagHtml = `<span class="btcard-cand-flags">${cands.map(t => TEAMS[t]?.flag || '').join('')}</span>`;
       }
     }
-    return `<div class="btcard-team btcard-team-tbd">
+    return `<div class="btcard-team btcard-team-tbd ${sideClass}">
       ${flagHtml}
       ${showLabel ? `<span class="btcard-tbd-label">${label || 'TBD'}</span>` : ''}
     </div>`;
@@ -2073,6 +2077,24 @@ function attachBracketCardListeners(container) {
   container.querySelectorAll('.match-card[data-bteam1]').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-venue') || e.target.closest('.card-cal-btn') || e.target.closest('.grp-link') || e.target.closest('[data-grp]')) return;
+      // Tapping a team name/flag selects that country; elsewhere opens the match detail
+      const side = e.target.closest('.ct-home, .btcard-team-home') ? 'home'
+        : e.target.closest('.ct-away, .btcard-team-away') ? 'away' : null;
+      if (side) {
+        const t = side === 'home' ? card.dataset.bteam1 : card.dataset.bteam2;
+        if (t && TEAMS[t]) {
+          if (currentTab === 'brackets') {
+            bracketTeamFilter = t;
+            if (bracketView === 'tree') bracketView = 'list';
+            if (bracketView === 'columns') bracketColsResetScroll = true;
+            renderBracketChips(); renderBrackets();
+            window.scrollTo({ top: 0, behavior: 'instant' });
+          } else {
+            selectTeam(t);
+          }
+          return;
+        }
+      }
       if (card.dataset.matchId) openMatchDetail(card.dataset.matchId, true);
     });
   });
@@ -2474,30 +2496,54 @@ function summaryTeamId(side) {
   return comps.find(c => c.homeAway === side)?.team?.id || null;
 }
 
-function detailGoalsHtml(info) {
-  const plays = detailSummary?.scoringPlays
-    || (detailSummary?.plays || []).filter(p => p.scoringPlay);
-  if (!plays || !plays.length) return '';
-  const homeId = summaryTeamId('home'), awayId = summaryTeamId('away');
-  // Home/away in the summary may be swapped vs our slot order — map by name
-  const espHomeName = mapEspnName(detailSummary?.header?.competitions?.[0]?.competitors?.find(c => c.homeAway === 'home')?.team?.displayName || '');
-  const homeIsInfoHome = espHomeName === info.home;
-  const home = [], away = [];
-  for (const p of plays) {
-    if (isShootoutPlay(p)) continue;
-    const txt = `${p.type?.text || ''} ${p.text || ''}`.toLowerCase();
-    const note = txt.includes('penalt') ? ' <span class="md-goal-note">(pen)</span>'
-      : txt.includes('own goal') || p.ownGoal ? ' <span class="md-goal-note">(og)</span>' : '';
-    const ath = p.participants?.find(x => x.type === 'scorer')?.athlete || p.participants?.[0]?.athlete || p.athlete;
-    const name = (ath?.shortName || ath?.displayName || '').split(' ').pop();
-    if (!name) continue;
-    const rawMin = p.clock?.displayValue || '';
-    const min = rawMin.includes(':') ? `${parseInt(rawMin)}'` : rawMin;
-    const espSide = p.team?.id === homeId ? 'espHome' : p.team?.id === awayId ? 'espAway' : null;
-    if (!espSide) continue;
-    const toHome = (espSide === 'espHome') === homeIsInfoHome;
-    (toHome ? home : away).push(`⚽ ${name} ${min}${note}`);
+// Map an ESPN team id to our home/away slot (summary home/away may be swapped)
+function mdTeamSide(teamId, info) {
+  const comps = detailSummary?.header?.competitions?.[0]?.competitors || [];
+  const espHome = mapEspnName(comps.find(c => c.homeAway === 'home')?.team?.displayName || '');
+  const hih = espHome === info.home;
+  if (teamId === summaryTeamId('home')) return hih ? 'home' : 'away';
+  if (teamId === summaryTeamId('away')) return hih ? 'away' : 'home';
+  return null;
+}
+function mdEvAthletes(ev) {
+  if (Array.isArray(ev.athletesInvolved) && ev.athletesInvolved.length) return ev.athletesInvolved;
+  if (Array.isArray(ev.participants)) return ev.participants.map(p => p.athlete).filter(Boolean);
+  if (ev.athlete) return [ev.athlete];
+  return [];
+}
+function mdLastName(a) { return (a?.shortName || a?.displayName || '').split(' ').pop(); }
+function mdEvMin(ev) { const c = ev.clock?.displayValue || ''; return c.includes(':') ? `${parseInt(c)}'` : c; }
+
+// Parse the summary's keyEvents into goals / cards / substitutions
+function mdParseEvents(info) {
+  const evs = detailSummary?.keyEvents || detailSummary?.commentary || [];
+  const goals = { home: [], away: [] };
+  const cards = {};       // athlete id -> 'yellow' | 'red'
+  const subEvents = [];   // { side, aths:[athlete], min }
+  for (const ev of evs) {
+    const type = (ev.type?.text || ev.type?.name || '').toLowerCase();
+    const side = mdTeamSide(ev.team?.id, info);
+    const aths = mdEvAthletes(ev);
+    if (!type) continue;
+    if (type.includes('substitution')) {
+      if (side && aths.length) subEvents.push({ side, aths, min: mdEvMin(ev) });
+    } else if (type.includes('card')) {
+      const ct = cardTypeOf(ev);
+      const a = aths[0];
+      if (ct && a && a.id != null) cards[a.id] = (ct === 'red' || cards[a.id] === 'red') ? 'red' : 'yellow';
+    } else if ((type.includes('goal') || ev.scoringPlay || (type.includes('penalt') && type.includes('scored'))) && !isShootoutPlay(ev)) {
+      const nm = mdLastName(aths[0]);
+      if (!nm || !side) continue;
+      const note = (type.includes('penalt') || ev.penaltyKick) ? ' <span class="md-goal-note">(pen)</span>'
+        : (type.includes('own goal') || ev.ownGoal) ? ' <span class="md-goal-note">(og)</span>' : '';
+      goals[side].push(`⚽ ${nm} ${mdEvMin(ev)}${note}`);
+    }
   }
+  return { goals, cards, subEvents };
+}
+
+function detailGoalsHtml(info, parsed) {
+  const { home, away } = parsed.goals;
   if (!home.length && !away.length) return '';
   return `<div class="md-section"><div class="md-section-label">Goals</div>
     <div class="md-goals">
@@ -2538,62 +2584,53 @@ function detailStatsHtml(info) {
   return html ? `<div class="md-section"><div class="md-section-label">Match stats</div>${html}</div>` : '';
 }
 
-function detailPitchHtml(info) {
+// Lineups + subs + cards. Works for live ("On the pitch now"), completed
+// ("Lineups"), and upcoming ("Starting XI"). Subs and cards come from keyEvents.
+function detailLineupHtml(info, parsed, state) {
   const rosters = detailSummary?.rosters;
   if (!Array.isArray(rosters) || !rosters.length) return '';
+  const { cards, subEvents } = parsed;
+
   const colFor = side => {
-    const r = rosters.find(x => x.homeAway === side);
+    const teamName = side === 'home' ? info.home : info.away;
+    const r = rosters.find(x => mapEspnName(x.team?.displayName || '') === teamName)
+           || rosters.find(x => x.homeAway === side);
     const players = r?.roster || [];
-    if (!players.length) return null;
     const starters = players.filter(p => p.starter);
     if (!starters.length) return null;
+    const starterIds = new Set(starters.map(p => p.athlete?.id));
+
+    // Resolve substitutions for this team: the athlete already on (starter) went off
+    const offToOn = {}; // outId -> { name, id }
+    subEvents.filter(s => s.side === side).forEach(s => {
+      const out = s.aths.find(a => starterIds.has(a.id));
+      const inA = s.aths.find(a => a !== out);
+      if (out && inA) offToOn[out.id] = { name: mdLastName(inA), id: inA.id };
+    });
+
+    const cardChip = id => {
+      const c = cards[id];
+      return c === 'red' ? '<span class="md-card-chip red"></span>' : c === 'yellow' ? '<span class="md-card-chip yellow"></span>' : '';
+    };
+
     let rows = '';
     starters.forEach(p => {
       const ath = p.athlete || {};
-      const name = (ath.shortName || ath.displayName || '').split(' ').pop();
-      const num = p.jersey || '';
-      const pos = p.position?.abbreviation || '';
-      const off = !!p.subbedOut;
-      const yellow = !!p.yellowCard, red = !!p.redCard;
-      const cardChip = red ? '<span class="md-card-chip red"></span>' : yellow ? '<span class="md-card-chip yellow"></span>' : '';
+      const name = mdLastName(ath);
+      const off = !!offToOn[ath.id];
+      const red = cards[ath.id] === 'red';
       rows += `<div class="md-player ${off ? 'off' : ''} ${red ? 'red' : ''}">
-        <span class="md-player-num">${num}</span><span class="md-player-name">${name}</span>${cardChip}<span class="md-player-pos">${pos}</span></div>`;
-      // Player who came on for this starter
-      const inFor = players.find(q => q.subbedIn && (q.subbedInFor?.athlete?.id === ath.id || q.subbedForId === ath.id));
-      if (off) {
-        const on = inFor || null;
-        const onName = on ? (on.athlete?.shortName || on.athlete?.displayName || '').split(' ').pop() : '';
-        if (onName) rows += `<div class="md-player-sub">↑ ${onName}</div>`;
-      }
+        <span class="md-player-num">${p.jersey || ''}</span><span class="md-player-name">${name}</span>${cardChip(ath.id)}<span class="md-player-pos">${p.position?.abbreviation || ''}</span></div>`;
+      if (off) rows += `<div class="md-player-sub">↑ ${offToOn[ath.id].name}${cardChip(offToOn[ath.id].id)}</div>`;
     });
-    const teamName = side === 'home' ? info.home : info.away;
     return `<div class="md-pitch-col"><div class="md-pitch-team">${TEAMS[teamName]?.flag || ''} ${teamName}</div>${rows}</div>`;
   };
-  const h = colFor('home'), a = colFor('away');
-  if (!h || !a) return '';
-  return `<div class="md-section"><div class="md-section-label">On the pitch now</div>
-    <div class="md-pitch">${h}${a}</div></div>`;
-}
 
-// Starting XI (for upcoming, when ESPN has it) — simpler, no subs/cards
-function detailLineupHtml(info) {
-  const rosters = detailSummary?.rosters;
-  if (!Array.isArray(rosters) || !rosters.length) return '';
-  const colFor = side => {
-    const r = rosters.find(x => x.homeAway === side);
-    const starters = (r?.roster || []).filter(p => p.starter);
-    if (!starters.length) return null;
-    const rows = starters.map(p => {
-      const ath = p.athlete || {};
-      const name = (ath.shortName || ath.displayName || '').split(' ').pop();
-      return `<div class="md-player"><span class="md-player-num">${p.jersey || ''}</span><span class="md-player-name">${name}</span><span class="md-player-pos">${p.position?.abbreviation || ''}</span></div>`;
-    }).join('');
-    const teamName = side === 'home' ? info.home : info.away;
-    return `<div class="md-pitch-col"><div class="md-pitch-team">${TEAMS[teamName]?.flag || ''} ${teamName}</div>${rows}</div>`;
-  };
   const h = colFor('home'), a = colFor('away');
   if (!h || !a) return '';
-  return `<div class="md-section"><div class="md-section-label">Starting XI</div><div class="md-pitch">${h}${a}</div></div>`;
+  const label = state === 'live' ? 'On the pitch now' : state === 'done' ? 'Lineups' : 'Starting XI';
+  return `<div class="md-section"><div class="md-section-label">${label}</div>
+    <div class="md-pitch">${h}${a}</div></div>`;
 }
 
 function detailAdvancesHtml(info) {
@@ -2685,12 +2722,13 @@ function renderMatchDetail() {
       <div class="md-hero-meta">${metaBits.join(' · ')}</div>
     </div>`;
 
+  const parsed = mdParseEvents(info);
   if (!isUpcoming) {
-    html += detailGoalsHtml(info);
+    html += detailGoalsHtml(info, parsed);
     html += detailStatsHtml(info);
   }
-  if (isLive) html += detailPitchHtml(info);
-  if (isUpcoming) html += detailLineupHtml(info);
+  // Lineups: live → on the pitch now, completed → final XI + subs, upcoming → starting XI
+  html += detailLineupHtml(info, parsed, isLive ? 'live' : isDone ? 'done' : 'upcoming');
   html += detailConditionsHtml(info);
   html += detailAdvancesHtml(info);
   html += `</div>`;
@@ -2768,6 +2806,15 @@ function renderStadiums() {
   list.querySelectorAll('.match-card').forEach(card => {
     card.addEventListener('click', e => {
       if (e.target.closest('.card-venue') || e.target.closest('.card-group') || e.target.closest('.card-cal-btn') || e.target.closest('.grp-link') || e.target.closest('[data-grp]')) return;
+      // Tapping a team name/flag opens that team; elsewhere opens the match detail
+      const side = e.target.closest('.ct-home, .btcard-team-home') ? 'home'
+        : e.target.closest('.ct-away, .btcard-team-away') ? 'away' : null;
+      if (side) {
+        const t = card.dataset.id
+          ? (side === 'home' ? card.dataset.home : card.dataset.away)
+          : (side === 'home' ? card.dataset.bteam1 : card.dataset.bteam2);
+        if (t && TEAMS[t]) { selectTeam(t); return; }
+      }
       if (card.dataset.id) openMatchDetail(card.dataset.id, false);
       else if (card.dataset.matchId) openMatchDetail(card.dataset.matchId, true);
     });
