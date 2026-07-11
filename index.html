@@ -1005,7 +1005,7 @@ function formatCardSide(list, align) {
 
 // ─── STATE ───────────────────────────────────────────────────────────────────
 let currentTab = 'brackets';
-let currentGroup = 'UPCOMING';
+let currentGroup = 'ALL_GROUPS';
 let bracketFilter = 'upcoming';
 let bracketView = 'list'; // 'list' | 'columns' | 'tree'
 let bracketTreePair = 0;
@@ -1260,7 +1260,7 @@ function renderTeamChips() {
       const name = el.dataset.team;
       if (currentTeamFilter === name) {
         currentTeamFilter = null;
-        currentGroup = 'UPCOMING';
+        currentGroup = 'ALL_GROUPS';
         groupFixtureFilter = 'upcoming';
         renderChips();
       } else {
@@ -1281,8 +1281,6 @@ function renderChips() {
   wrap.style.display = 'flex';
   const groups = ['A','B','C','D','E','F','G','H','I','J','K','L'];
   wrap.innerHTML = `
-    <div class="chip upcoming-chip ${currentGroup === 'UPCOMING' ? 'active-green' : ''}" data-group="UPCOMING">Upcoming</div>
-    <div class="chip past-chip ${currentGroup === 'PAST' ? 'active-past' : ''}" data-group="PAST">Past</div>
     <div class="chip ${currentGroup === 'ALL_GROUPS' ? 'active' : ''}" data-group="ALL_GROUPS">All Groups</div>
     ${groups.map(g => `
       <div class="chip ${g === currentGroup ? 'active' : ''}" data-group="${g}">Group ${g}</div>
@@ -2438,7 +2436,7 @@ function openMatchDetail(id, isBracket, round) {
 
 function closeMatchDetail() {
   detailMatch = null; detailSummary = null;
-  const st = prevState || { tab: 'brackets', group: 'UPCOMING', teamFilter: null };
+  const st = prevState || { tab: 'brackets', group: 'ALL_GROUPS', teamFilter: null };
   prevState = null;
   currentTab = st.tab;
   currentGroup = st.group;
@@ -2789,7 +2787,7 @@ function renderStadiums() {
 
   document.getElementById('stadium-back').addEventListener('click', () => {
     currentStadium = null;
-    const st = prevState || { tab: 'group-phase', group: 'UPCOMING', teamFilter: null };
+    const st = prevState || { tab: 'group-phase', group: 'ALL_GROUPS', teamFilter: null };
     prevState = null;
     currentTab = st.tab;
     currentGroup = st.group;
