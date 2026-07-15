@@ -574,6 +574,7 @@ const SCORER_DONE    = new Set(); // completed matchIds whose scorers are alread
 const STATUS_NAMES   = {}; // matchId → ESPN status type name + description (break detection)
 const BRACKET_RESOLVED = {}; // bracket matchId → { home, away } actual team names (live wiring)
 const BRACKET_WINNERS  = {}; // bracket matchId → advancing team name (from played knockout games)
+const BRACKET_LOSERS   = {}; // bracket matchId → losing team name (for third-place playoff)
 
 function recomputeStandings() {
   for (const k of Object.keys(STANDINGS)) delete STANDINGS[k];
@@ -610,12 +611,16 @@ function recomputeStandings() {
 function resolveBracket(espnEvents) {
   for (const k in BRACKET_RESOLVED) delete BRACKET_RESOLVED[k];
   for (const k in BRACKET_WINNERS)  delete BRACKET_WINNERS[k];
+  for (const k in BRACKET_LOSERS)   delete BRACKET_LOSERS[k];
   const used = new Set();
   const dayOf = d => d ? new Intl.DateTimeFormat('en-CA', { timeZone: LOCAL_TZ }).format(new Date(d)) : null;
 
   const knownTeam = (m, side) => {
     const explicit = side === 'home' ? m.team1 : m.team2;
     if (explicit) return explicit;
+    // Third-place playoff: participants are the two losing semifinalists
+    const lpred = LOSER_PREDS[m.id];
+    if (lpred) return BRACKET_LOSERS[side === 'home' ? lpred[0] : lpred[1]] || null;
     const preds = BRACKET_PREDECESSORS[m.id];
     if (preds) return BRACKET_WINNERS[side === 'home' ? preds[0] : preds[1]] || null;
     const label = side === 'home' ? m.label1 : m.label2;
@@ -667,7 +672,10 @@ function resolveBracket(espnEvents) {
         }
         if (ev.state === 'in') { CLOCKS[m.id] = ev.clock; STATUS_NAMES[m.id] = ev.statusName; }
         else delete CLOCKS[m.id];
-        if (ev.state === 'post' && ev.winner) BRACKET_WINNERS[m.id] = ev.winner;
+        if (ev.state === 'post' && ev.winner) {
+          BRACKET_WINNERS[m.id] = ev.winner;
+          BRACKET_LOSERS[m.id] = [home, away].find(t => t && t !== ev.winner) || null;
+        }
       } else {
         BRACKET_RESOLVED[m.id] = { home: home || null, away: away || null };
         delete RESULTS[m.id];
@@ -1696,6 +1704,9 @@ const BRACKET_ROUNDS = [
     tbd('sf-1', 'TBD', 'TBD', '2026-07-14T19:00:00Z', 'AT&T Stadium, Arlington, TX'),
     tbd('sf-2', 'TBD', 'TBD', '2026-07-15T19:00:00Z', 'Mercedes-Benz Stadium, Atlanta, GA'),
   ]},
+  { key:'tpo', label:'Third-place playoff', matches: [
+    tbd('tpo-1', 'TBD', 'TBD', '2026-07-18T21:00:00Z', 'Hard Rock Stadium, Miami Gardens, FL'),
+  ]},
   { key:'fin', label:'Final', matches: [
     tbd('fin-1', 'TBD', 'TBD', '2026-07-19T19:00:00Z', 'MetLife Stadium, East Rutherford, NJ'),
   ]},
@@ -1723,6 +1734,11 @@ const BRACKET_PREDECESSORS = {
   'fin-1': ['sf-1',   'sf-2'],    // M104: W101 vs W102
 };
 
+// Third-place playoff is contested by the two losing semifinalists (M103)
+const LOSER_PREDS = {
+  'tpo-1': ['sf-1', 'sf-2'],
+};
+
 // Returns all projected team names that could come out of a given match
 function getMatchCandidatesAll(matchId) {
   // Once a game is decided/scheduled, collapse to the actual team(s)
@@ -1745,6 +1761,12 @@ function getMatchCandidatesAll(matchId) {
 
 // Returns candidate teams for one slot (home/away) of an R16+ match; null for R32
 function getSlotCandidates(matchId, side) {
+  // Third-place playoff: candidates are the losing semifinalists
+  const lpred = LOSER_PREDS[matchId];
+  if (lpred) {
+    const pid = side === 'home' ? lpred[0] : lpred[1];
+    return BRACKET_LOSERS[pid] ? [BRACKET_LOSERS[pid]] : getMatchCandidatesAll(pid);
+  }
   const preds = BRACKET_PREDECESSORS[matchId];
   if (!preds) return null;
   return getMatchCandidatesAll(side === 'home' ? preds[0] : preds[1]);
@@ -2233,12 +2255,13 @@ function renderBracketColumns() {
   }
 }
 
-// Overlapping pairs: each round appears as right col of one slide and left col of next
+// Overlapping pairs of the winners bracket (excludes the third-place playoff)
+const _rnd = k => BRACKET_ROUNDS.find(r => r.key === k);
 const TREE_PAIRS = [
-  [BRACKET_ROUNDS[0], BRACKET_ROUNDS[1]], // R32 → R16
-  [BRACKET_ROUNDS[1], BRACKET_ROUNDS[2]], // R16 → QF
-  [BRACKET_ROUNDS[2], BRACKET_ROUNDS[3]], // QF  → SF
-  [BRACKET_ROUNDS[3], BRACKET_ROUNDS[4]], // SF  → Final
+  [_rnd('r32'), _rnd('r16')], // R32 → R16
+  [_rnd('r16'), _rnd('qf')],  // R16 → QF
+  [_rnd('qf'),  _rnd('sf')],  // QF  → SF
+  [_rnd('sf'),  _rnd('fin')], // SF  → Final
 ];
 
 function renderBracketTree() {
