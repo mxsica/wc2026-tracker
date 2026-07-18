@@ -1028,6 +1028,7 @@ let detailMatch = null;      // { id, isBracket, round } while the match detail 
 let detailSummary = null;    // cached ESPN summary for the open detail match
 let detailWeather = null;    // cached Open-Meteo weather for the open detail match
 let detailWeatherKey = null; // guards against refetching weather for the same match
+let detailPollHandle = null; // interval that refreshes the open detail view
 
 // ─── HELPERS ─────────────────────────────────────────────────────────────────
 const LOCAL_TZ = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -2455,9 +2456,14 @@ function openMatchDetail(id, isBracket, round) {
   window.scrollTo({ top: 0, behavior: 'instant' });
   fetchDetailSummary();
   fetchDetailWeather();
+  // Keep the open detail fresh (lineups drop ~40-60 min pre-kickoff; live
+  // score/events update too) even when the global live-poll isn't running.
+  clearInterval(detailPollHandle);
+  detailPollHandle = setInterval(fetchDetailSummary, 30000);
 }
 
 function closeMatchDetail() {
+  clearInterval(detailPollHandle); detailPollHandle = null;
   detailMatch = null; detailSummary = null;
   const st = prevState || { tab: 'brackets', group: 'ALL_GROUPS', teamFilter: null };
   prevState = null;
@@ -2754,7 +2760,9 @@ function renderMatchDetail() {
   html += detailAdvancesHtml(info);
   html += `</div>`;
 
+  const prevScroll = window.scrollY;
   list.innerHTML = html;
+  window.scrollTo(0, prevScroll); // keep position across background refreshes
   document.getElementById('md-back').addEventListener('click', closeMatchDetail);
 }
 
