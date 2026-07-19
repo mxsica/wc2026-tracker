@@ -2886,6 +2886,9 @@ document.querySelectorAll('.tab').forEach(el => {
     currentTab = el.dataset.tab;
     currentStadium = null;
     prevState = null;
+    // Leaving an open match detail view
+    detailMatch = null; detailSummary = null;
+    clearInterval(detailPollHandle); detailPollHandle = null;
     if (currentTab === 'brackets') {
       document.getElementById('group-chips').style.display = 'none';
       document.getElementById('team-chips').style.display = 'none';
