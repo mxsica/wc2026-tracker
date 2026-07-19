@@ -357,6 +357,7 @@
   .md-player.off .md-player-name { text-decoration: line-through; color: var(--text3); }
   .md-player.red .md-player-name { color: var(--text3); }
   .md-player-sub { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #1D9E75; padding: 1px 0 3px 24px; }
+  .md-sub-min { color: var(--text3); font-size: 11px; }
   .md-card-chip { display: inline-block; width: 8px; height: 11px; border-radius: 1.5px; vertical-align: -1px; }
   .md-card-chip.yellow { background: #eab308; }
   .md-card-chip.red { background: var(--live); }
@@ -2628,11 +2629,11 @@ function detailLineupHtml(info, parsed, state) {
     const starterIds = new Set(starters.map(p => p.athlete?.id));
 
     // Resolve substitutions for this team: the athlete already on (starter) went off
-    const offToOn = {}; // outId -> { name, id }
+    const offToOn = {}; // outId -> { name, id, min }
     subEvents.filter(s => s.side === side).forEach(s => {
       const out = s.aths.find(a => starterIds.has(a.id));
       const inA = s.aths.find(a => a !== out);
-      if (out && inA) offToOn[out.id] = { name: mdLastName(inA), id: inA.id };
+      if (out && inA) offToOn[out.id] = { name: mdLastName(inA), id: inA.id, min: s.min };
     });
 
     const cardChip = id => {
@@ -2644,11 +2645,11 @@ function detailLineupHtml(info, parsed, state) {
     starters.forEach(p => {
       const ath = p.athlete || {};
       const name = mdLastName(ath);
-      const off = !!offToOn[ath.id];
+      const sub = offToOn[ath.id];
       const red = cards[ath.id] === 'red';
-      rows += `<div class="md-player ${off ? 'off' : ''} ${red ? 'red' : ''}">
-        <span class="md-player-num">${p.jersey || ''}</span><span class="md-player-name">${name}</span>${cardChip(ath.id)}<span class="md-player-pos">${p.position?.abbreviation || ''}</span></div>`;
-      if (off) rows += `<div class="md-player-sub">↑ ${offToOn[ath.id].name}${cardChip(offToOn[ath.id].id)}</div>`;
+      rows += `<div class="md-player ${sub ? 'off' : ''} ${red ? 'red' : ''}">
+        <span class="md-player-num">${p.jersey || ''}</span><span class="md-player-name">${name}</span>${cardChip(ath.id)}</div>`;
+      if (sub) rows += `<div class="md-player-sub">↑ ${sub.name}${sub.min ? ` <span class="md-sub-min">${sub.min}</span>` : ''}${cardChip(sub.id)}</div>`;
     });
     return `<div class="md-pitch-col"><div class="md-pitch-team">${TEAMS[teamName]?.flag || ''} ${teamName}</div>${rows}</div>`;
   };
