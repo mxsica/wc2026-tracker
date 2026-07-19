@@ -2499,20 +2499,22 @@ async function fetchDetailWeather() {
   const target = (isDone && info.kickoff) ? info.kickoff : new Date();
   try {
     if (!isDone) {
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&current=temperature_2m,relative_humidity_2m,weather_code&temperature_unit=fahrenheit`;
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&current=temperature_2m,relative_humidity_2m,weather_code`;
       const res = await fetch(url); if (!res.ok) return;
       const d = await res.json();
       detailWeather = { temp: Math.round(d.current.temperature_2m), humidity: d.current.relative_humidity_2m, code: d.current.weather_code };
     } else {
-      // Completed: pull the hourly value nearest kickoff
-      const day = new Intl.DateTimeFormat('en-CA', { timeZone: 'UTC' }).format(target);
-      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&hourly=temperature_2m,relative_humidity_2m,weather_code&temperature_unit=fahrenheit&timezone=UTC&start_date=${day}&end_date=${day}&past_days=32`;
+      // Completed: pull the hourly value nearest kickoff. Use past_days back to
+      // the match day (Open-Meteo forbids past_days + start_date together).
+      const daysAgo = Math.ceil((Date.now() - target.getTime()) / 86400000);
+      const pastDays = Math.min(92, Math.max(1, daysAgo + 1));
+      const url = `https://api.open-meteo.com/v1/forecast?latitude=${coords[0]}&longitude=${coords[1]}&hourly=temperature_2m,relative_humidity_2m,weather_code&timezone=UTC&past_days=${pastDays}&forecast_days=1`;
       const res = await fetch(url); if (!res.ok) return;
       const d = await res.json();
       const times = d.hourly?.time || [];
-      let bestI = 0, bestDiff = Infinity;
+      let bestI = -1, bestDiff = Infinity;
       times.forEach((t, i) => { const diff = Math.abs(new Date(t + 'Z') - target); if (diff < bestDiff) { bestDiff = diff; bestI = i; } });
-      if (times.length) detailWeather = { temp: Math.round(d.hourly.temperature_2m[bestI]), humidity: d.hourly.relative_humidity_2m[bestI], code: d.hourly.weather_code[bestI] };
+      if (bestI >= 0) detailWeather = { temp: Math.round(d.hourly.temperature_2m[bestI]), humidity: d.hourly.relative_humidity_2m[bestI], code: d.hourly.weather_code[bestI] };
     }
     if (detailMatch && detailMatch.id === reqId) renderMatchDetail();
   } catch (e) { console.warn('weather failed', e); }
@@ -2692,7 +2694,7 @@ function detailConditionsHtml(info) {
     ? (() => { const d = wmoDesc(w.code); return `
         <div class="md-cond-icon">${d.icon}</div>
         <div class="md-cond-list">
-          <div class="md-cond-item"><span class="md-cond-val">${w.temp}°F</span><span class="md-cond-key">Temp</span></div>
+          <div class="md-cond-item"><span class="md-cond-val">${w.temp}°C</span><span class="md-cond-key">Temp</span></div>
           <div class="md-cond-item"><span class="md-cond-val">${w.humidity}%</span><span class="md-cond-key">Humidity</span></div>
           <div class="md-cond-item"><span class="md-cond-val">${d.label}</span><span class="md-cond-key">Sky</span></div>
         </div>`; })()
