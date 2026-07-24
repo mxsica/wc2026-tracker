@@ -1137,8 +1137,20 @@ function landingRoundIndex() {
 }
 
 // Tree carousel pair to land on for the current filter: past → start, else → the front
+// Whether the bracket currently has upcoming and/or completed games
+function bracketPastUpcoming() {
+  const all = BRACKET_ROUNDS.flatMap(r => r.matches);
+  return { hasPast: all.some(isBracketPast), hasUpcoming: all.some(m => !isBracketPast(m)) };
+}
+// Effective filter: honor the pill only when both exist; otherwise the one that does
+function effectiveBracketFilter() {
+  const { hasPast, hasUpcoming } = bracketPastUpcoming();
+  if (hasPast && hasUpcoming) return bracketFilter;
+  return hasPast ? 'past' : 'upcoming';
+}
+
 function treePairForFilter() {
-  if (bracketFilter === 'past') return 0;
+  if (effectiveBracketFilter() === 'past') return 0;
   return Math.min(landingRoundIndex(), TREE_PAIRS.length - 1);
 }
 
@@ -1146,11 +1158,15 @@ function renderBracketChips() {
   const wrap = document.getElementById('group-chips');
   wrap.style.display = 'flex';
 
-  // Upcoming/Past are inactive while a country is selected (country view ignores them)
+  // Upcoming/Past only shown when both exist; inactive while a country is selected
+  const { hasPast, hasUpcoming } = bracketPastUpcoming();
   const filterOn = !bracketTeamFilter;
+  const eff = effectiveBracketFilter();
+  const filterChips = (hasPast && hasUpcoming) ? `
+    <div class="chip upcoming-chip ${filterOn && eff === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
+    <div class="chip past-chip ${filterOn && eff === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>` : '';
   wrap.innerHTML = `
-    <div class="chip upcoming-chip ${filterOn && bracketFilter === 'upcoming' ? 'active-green' : ''}" data-bf="upcoming">Upcoming</div>
-    <div class="chip past-chip ${filterOn && bracketFilter === 'past' ? 'active-past' : ''}" data-bf="past">Past</div>
+    ${filterChips}
     <div class="chip ${bracketView === 'list' ? 'active' : ''}" data-bv="list">List</div>
     <div class="chip ${bracketView === 'columns' ? 'active' : ''}" data-bv="columns">Columns</div>
     <div class="chip ${bracketView === 'tree' ? 'active' : ''}" data-bv="tree">Tree</div>`;
@@ -2177,7 +2193,7 @@ function renderBracketList() {
   }
 
   // Past view reads newest → oldest: reverse rounds, dates, and games within a date
-  const isPastView = bracketFilter === 'past';
+  const isPastView = effectiveBracketFilter() === 'past';
   const rounds = isPastView ? [...BRACKET_ROUNDS].reverse() : BRACKET_ROUNDS;
 
   rounds.forEach(({ label, matches }) => {
@@ -2245,7 +2261,7 @@ function renderBracketColumns() {
   const wrapEl = document.getElementById('btree-wrap');
   if (bracketColsResetScroll) {
     bracketColsResetScroll = false;
-    const targetKey = bracketFilter === 'past'
+    const targetKey = effectiveBracketFilter() === 'past'
       ? BRACKET_ROUNDS[0].key
       : BRACKET_ROUNDS[landingRoundIndex()].key;
     requestAnimationFrame(() => {
