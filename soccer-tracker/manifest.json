@@ -1,6 +1,6 @@
 {
-  "name": "Match Tracker ⚽",
-  "short_name": "Match Tracker",
+  "name": "Fuchiball ⚽",
+  "short_name": "Fuchiball",
   "description": "Follow any soccer team, any league",
   "start_url": "/",
   "display": "standalone",
