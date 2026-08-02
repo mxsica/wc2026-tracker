@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>Fuchiball ⚽</title>
+<title>Fuchibol ⚽</title>
 <link rel="icon" type="image/png" href="/favicon.png">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/manifest.json">
@@ -11,7 +11,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Fuchiball">
+<meta name="apple-mobile-web-app-title" content="Fuchibol">
 <style>
   :root {
     --bg: #f5f5f5;
@@ -134,14 +134,23 @@
   .loading-row { text-align: center; padding: 40px 20px; color: var(--text3); font-size: 14px; }
   .fetch-error { text-align: center; padding: 24px 20px; color: var(--text3); font-size: 13px; }
 
-  /* DISCOVER — team rows */
+  /* DISCOVER — search + team rows */
+  .search-wrap { padding: 10px 16px 0; }
+  .search-input {
+    width: 100%; padding: 10px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-size: 14px; outline: none;
+    -webkit-appearance: none; appearance: none;
+  }
+  .search-input::placeholder { color: var(--text3); }
   .team-row {
     display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border);
     border-radius: var(--radius); padding: 10px 14px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.15s;
   }
   .team-row:active { opacity: 0.7; }
   .team-row-logo { width: 30px; height: 30px; object-fit: contain; flex-shrink: 0; border-radius: 4px; background: var(--surface2); }
-  .team-row-name { font-size: 15px; font-weight: 600; color: var(--text); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-row-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+  .team-row-name { font-size: 15px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .team-row-sub { font-size: 12px; color: var(--text3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .team-row-star { font-size: 20px; color: var(--text3); flex-shrink: 0; }
   .team-row.followed .team-row-star { color: #eab308; }
   .team-row.followed { border-color: var(--accent); }
@@ -208,7 +217,7 @@
 
 <div class="header">
   <div class="header-top">
-    <div class="header-title">⚽ Fuchiball</div>
+    <div class="header-title">⚽ Fuchibol</div>
     <div class="last-updated" id="last-updated"></div>
   </div>
   <div class="tabs" id="tabs">
@@ -265,6 +274,7 @@ const state = {
   tab: 'myteams',
   myFilter: 'upcoming', // 'upcoming' | 'recent'
   discoverLeague: LEAGUES[0].slug,
+  discoverQuery: '',    // cross-league team search
   standingsLeague: LEAGUES[0].slug,
   myTeamsMatches: null,   // null = not loaded yet
   myTeamsLoading: false,
@@ -533,28 +543,64 @@ function leagueChipsHtml(activeSlug, dataAttr) {
 }
 
 let discoverRenderToken = 0;
-function renderDiscoverShell() {
-  return leagueChipsHtml(state.discoverLeague, 'discover-league') + `<div id="discover-list"><div class="loading-row">Loading teams…</div></div>`;
+
+function teamRowHtml(t, slug, showLeagueTag) {
+  const followed = isFollowed(slug, t.id);
+  return `<div class="team-row ${followed ? 'followed' : ''}" data-toggle-league="${esc(slug)}" data-toggle-id="${esc(t.id)}" data-toggle-name="${esc(t.name)}" data-toggle-abbrev="${esc(t.abbrev)}" data-toggle-logo="${esc(t.logo)}">
+    ${logoImg(t.logo, t.name, 'team-row-logo')}
+    <div class="team-row-text">
+      <div class="team-row-name">${esc(t.name)}</div>
+      ${showLeagueTag ? `<div class="team-row-sub">${esc(leagueName(slug))}</div>` : ''}
+    </div>
+    <div class="team-row-star">${followed ? '★' : '☆'}</div>
+  </div>`;
 }
+
+function renderDiscoverShell() {
+  return `<div class="search-wrap"><input type="search" id="discover-search" class="search-input" placeholder="Search any team…" autocomplete="off" value="${esc(state.discoverQuery)}"></div><div id="discover-body"></div>`;
+}
+
+// Browsing one league at a time (chips), OR searching by name across every curated league.
+async function loadDiscoverBody() {
+  const bodyEl = document.getElementById('discover-body');
+  if (!bodyEl) return;
+  const q = state.discoverQuery;
+  if (!q) {
+    bodyEl.innerHTML = leagueChipsHtml(state.discoverLeague, 'discover-league') + `<div id="discover-list"><div class="loading-row">Loading teams…</div></div>`;
+    loadDiscoverTeams();
+    return;
+  }
+  bodyEl.innerHTML = `<div class="loading-row">Searching all leagues…</div>`;
+  const myToken = ++discoverRenderToken;
+  const perLeague = await Promise.all(LEAGUES.map(async l => {
+    const teams = await getTeams(l.slug);
+    return (teams || []).map(t => ({ team: t, league: l.slug }));
+  }));
+  if (myToken !== discoverRenderToken || state.tab !== 'discover' || state.discoverQuery !== q) return;
+  const ql = q.toLowerCase();
+  const matches = perLeague.flat()
+    .filter(x => x.team.name.toLowerCase().includes(ql))
+    .sort((a, b) => a.team.name.localeCompare(b.team.name))
+    .slice(0, 40);
+  if (!matches.length) {
+    bodyEl.innerHTML = `<div class="empty-state">No teams found for "${esc(q)}".</div>`;
+    return;
+  }
+  bodyEl.innerHTML = matches.map(x => teamRowHtml(x.team, x.league, true)).join('');
+}
+
 async function loadDiscoverTeams() {
   const myToken = ++discoverRenderToken;
   const slug = state.discoverLeague;
   const teams = await getTeams(slug);
-  if (myToken !== discoverRenderToken || state.tab !== 'discover') return;
+  if (myToken !== discoverRenderToken || state.tab !== 'discover' || state.discoverQuery) return;
   const listEl = document.getElementById('discover-list');
   if (!listEl) return;
   if (teams === null) {
     listEl.innerHTML = `<div class="fetch-error">Couldn't load teams for ${esc(leagueName(slug))}. Try another league or check back later.</div>`;
     return;
   }
-  listEl.innerHTML = teams.map(t => {
-    const followed = isFollowed(slug, t.id);
-    return `<div class="team-row ${followed ? 'followed' : ''}" data-toggle-league="${esc(slug)}" data-toggle-id="${esc(t.id)}" data-toggle-name="${esc(t.name)}" data-toggle-abbrev="${esc(t.abbrev)}" data-toggle-logo="${esc(t.logo)}">
-      ${logoImg(t.logo, t.name, 'team-row-logo')}
-      <div class="team-row-name">${esc(t.name)}</div>
-      <div class="team-row-star">${followed ? '★' : '☆'}</div>
-    </div>`;
-  }).join('') || `<div class="empty-state">No teams found.</div>`;
+  listEl.innerHTML = teams.map(t => teamRowHtml(t, slug, false)).join('') || `<div class="empty-state">No teams found.</div>`;
 }
 
 // ─── RENDER: STANDINGS TAB ─────────────────────────────────────────────────
@@ -771,7 +817,7 @@ function renderApp() {
     content.innerHTML = renderMyTeams();
   } else if (state.tab === 'discover') {
     content.innerHTML = renderDiscoverShell();
-    loadDiscoverTeams();
+    loadDiscoverBody();
   } else if (state.tab === 'standings') {
     content.innerHTML = renderStandingsShell();
     loadStandings();
@@ -804,6 +850,7 @@ document.getElementById('content').addEventListener('click', (e) => {
   if (el) { state.standingsLeague = el.dataset.standingsLeague; renderApp(); return; }
   el = e.target.closest('[data-toggle-league]');
   if (el) {
+    const willFollow = !isFollowed(el.dataset.toggleLeague, el.dataset.toggleId);
     toggleFollow({
       league: el.dataset.toggleLeague,
       id: el.dataset.toggleId,
@@ -811,8 +858,22 @@ document.getElementById('content').addEventListener('click', (e) => {
       abbrev: el.dataset.toggleAbbrev,
       logo: el.dataset.toggleLogo,
     });
-    loadDiscoverTeams();
+    el.classList.toggle('followed', willFollow);
+    const star = el.querySelector('.team-row-star');
+    if (star) star.textContent = willFollow ? '★' : '☆';
     return;
+  }
+});
+
+let discoverSearchDebounce = null;
+document.getElementById('content').addEventListener('input', (e) => {
+  if (e.target && e.target.id === 'discover-search') {
+    const val = e.target.value.trim();
+    clearTimeout(discoverSearchDebounce);
+    discoverSearchDebounce = setTimeout(() => {
+      state.discoverQuery = val;
+      loadDiscoverBody();
+    }, 300);
   }
 });
 
