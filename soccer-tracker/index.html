@@ -68,6 +68,23 @@
   .error-banner { display: none; background: rgba(245,158,11,0.12); color: #f59e0b; font-size: 12px;
     text-align: center; padding: 6px 16px; border-bottom: 1px solid rgba(245,158,11,0.2); }
 
+  /* ACTIVE LEAGUE BAR */
+  .league-bar { display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; font-size: 12px; }
+  #league-bar-name { color: var(--text2); font-weight: 600; }
+  .league-bar-change { color: var(--accent); cursor: pointer; font-weight: 500; }
+
+  /* LEAGUE PICKER (onboarding) */
+  .picker-intro { font-size: 15px; color: var(--text2); padding: 24px 0 16px; line-height: 1.4; }
+  .league-row {
+    display: flex; align-items: center; gap: 12px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px; margin-bottom: 8px; cursor: pointer; transition: opacity 0.15s;
+  }
+  .league-row:active { opacity: 0.7; }
+  .league-row-text { flex: 1; min-width: 0; }
+  .league-row-name { font-size: 15px; font-weight: 700; color: var(--text); }
+  .league-row-sub { font-size: 12px; color: var(--text3); margin-top: 2px; }
+  .league-row-arrow { font-size: 20px; color: var(--text3); }
+
   /* TABS */
   .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--border); margin: 0 -16px; }
   .tab {
@@ -220,7 +237,11 @@
     <div class="header-title">⚽ Fuchibol</div>
     <div class="last-updated" id="last-updated"></div>
   </div>
-  <div class="tabs" id="tabs">
+  <div class="league-bar" id="league-bar" style="display:none;">
+    <span id="league-bar-name"></span>
+    <span class="league-bar-change" data-change-league="1">Change league</span>
+  </div>
+  <div class="tabs" id="tabs" style="display:none;">
     <div class="tab" data-tab="myteams">My Teams</div>
     <div class="tab" data-tab="discover">Discover</div>
     <div class="tab" data-tab="standings">Standings</div>
@@ -253,13 +274,21 @@ const LEAGUE_BY_SLUG = Object.fromEntries(LEAGUES.map(l => [l.slug, l]));
 function leagueName(slug) { return LEAGUE_BY_SLUG[slug]?.name || slug; }
 
 // ─── PERSISTENCE ───────────────────────────────────────────────────────────
-const STORAGE_KEY = 'matchtracker_follows_v1';
+// v1 followed one league/tournament at a time — simpler mental model to start.
+const LEAGUE_KEY = 'fuchibol_league_v1';
+const STORAGE_KEY = 'fuchibol_follows_v1';
+function loadLeague() { return localStorage.getItem(LEAGUE_KEY) || null; }
+function saveLeague(slug) {
+  if (slug) localStorage.setItem(LEAGUE_KEY, slug);
+  else localStorage.removeItem(LEAGUE_KEY);
+}
 function loadFollows() {
   try { return JSON.parse(localStorage.getItem(STORAGE_KEY)) || []; }
   catch { return []; }
 }
 function saveFollows() { localStorage.setItem(STORAGE_KEY, JSON.stringify(follows)); }
-let follows = loadFollows(); // [{league, id, name, abbrev, logo}]
+let activeLeague = loadLeague();  // slug string, or null before onboarding
+let follows = loadFollows();      // [{league, id, name, abbrev, logo}] — all belong to activeLeague
 function isFollowed(league, id) { return follows.some(f => f.league === league && String(f.id) === String(id)); }
 function toggleFollow(team) {
   const idx = follows.findIndex(f => f.league === team.league && String(f.id) === String(team.id));
@@ -268,14 +297,25 @@ function toggleFollow(team) {
   saveFollows();
   refreshMyTeams();
 }
+function changeLeague() {
+  const msg = follows.length
+    ? `You're following ${follows.length} team${follows.length > 1 ? 's' : ''} in ${leagueName(activeLeague)}. Switching leagues clears that. Continue?`
+    : 'Switch to a different league or tournament?';
+  if (!confirm(msg)) return;
+  follows = [];
+  saveFollows();
+  activeLeague = null;
+  saveLeague(null);
+  state.discoverQuery = '';
+  state.myTeamsMatches = null;
+  renderRoot();
+}
 
 // ─── STATE ─────────────────────────────────────────────────────────────────
 const state = {
   tab: 'myteams',
   myFilter: 'upcoming', // 'upcoming' | 'recent'
-  discoverLeague: LEAGUES[0].slug,
-  discoverQuery: '',    // cross-league team search
-  standingsLeague: LEAGUES[0].slug,
+  discoverQuery: '',    // team search within the active league
   myTeamsMatches: null,   // null = not loaded yet
   myTeamsLoading: false,
   detail: null,           // { league, id, loading, error, data }
@@ -535,82 +575,72 @@ async function refreshMyTeams() {
   if (state.detail) refreshDetail();
 }
 
-// ─── RENDER: DISCOVER TAB ──────────────────────────────────────────────────
-function leagueChipsHtml(activeSlug, dataAttr) {
-  return `<div class="chips-wrap">${LEAGUES.map(l =>
-    `<div class="chip ${l.slug === activeSlug ? 'active' : ''}" data-${dataAttr}="${esc(l.slug)}">${esc(l.name)}</div>`
-  ).join('')}</div>`;
+// ─── RENDER: LEAGUE PICKER (onboarding + "change league") ─────────────────
+function leagueRowHtml(l) {
+  return `<div class="league-row" data-pick-league="${esc(l.slug)}">
+    <div class="league-row-text">
+      <div class="league-row-name">${esc(l.name)}</div>
+      <div class="league-row-sub">${esc(l.country)}</div>
+    </div>
+    <div class="league-row-arrow">›</div>
+  </div>`;
+}
+function renderLeaguePicker() {
+  return `<div class="picker-intro">Which league or tournament do you want to follow?</div>
+    ${LEAGUES.map(leagueRowHtml).join('')}`;
 }
 
-let discoverRenderToken = 0;
-
-function teamRowHtml(t, slug, showLeagueTag) {
+// ─── RENDER: DISCOVER TAB ──────────────────────────────────────────────────
+function teamRowHtml(t, slug) {
   const followed = isFollowed(slug, t.id);
   return `<div class="team-row ${followed ? 'followed' : ''}" data-toggle-league="${esc(slug)}" data-toggle-id="${esc(t.id)}" data-toggle-name="${esc(t.name)}" data-toggle-abbrev="${esc(t.abbrev)}" data-toggle-logo="${esc(t.logo)}">
     ${logoImg(t.logo, t.name, 'team-row-logo')}
     <div class="team-row-text">
       <div class="team-row-name">${esc(t.name)}</div>
-      ${showLeagueTag ? `<div class="team-row-sub">${esc(leagueName(slug))}</div>` : ''}
     </div>
     <div class="team-row-star">${followed ? '★' : '☆'}</div>
   </div>`;
 }
 
 function renderDiscoverShell() {
-  return `<div class="search-wrap"><input type="search" id="discover-search" class="search-input" placeholder="Search any team…" autocomplete="off" value="${esc(state.discoverQuery)}"></div><div id="discover-body"></div>`;
+  return `<div class="search-wrap"><input type="search" id="discover-search" class="search-input" placeholder="Search ${esc(leagueName(activeLeague))} teams…" autocomplete="off" value="${esc(state.discoverQuery)}"></div><div id="discover-list"><div class="loading-row">Loading teams…</div></div>`;
 }
 
-// Browsing one league at a time (chips), OR searching by name across every curated league.
-async function loadDiscoverBody() {
-  const bodyEl = document.getElementById('discover-body');
-  if (!bodyEl) return;
-  const q = state.discoverQuery;
-  if (!q) {
-    bodyEl.innerHTML = leagueChipsHtml(state.discoverLeague, 'discover-league') + `<div id="discover-list"><div class="loading-row">Loading teams…</div></div>`;
-    loadDiscoverTeams();
-    return;
-  }
-  bodyEl.innerHTML = `<div class="loading-row">Searching all leagues…</div>`;
-  const myToken = ++discoverRenderToken;
-  const perLeague = await Promise.all(LEAGUES.map(async l => {
-    const teams = await getTeams(l.slug);
-    return (teams || []).map(t => ({ team: t, league: l.slug }));
-  }));
-  if (myToken !== discoverRenderToken || state.tab !== 'discover' || state.discoverQuery !== q) return;
-  const ql = q.toLowerCase();
-  const matches = perLeague.flat()
-    .filter(x => x.team.name.toLowerCase().includes(ql))
-    .sort((a, b) => a.team.name.localeCompare(b.team.name))
-    .slice(0, 40);
-  if (!matches.length) {
-    bodyEl.innerHTML = `<div class="empty-state">No teams found for "${esc(q)}".</div>`;
-    return;
-  }
-  bodyEl.innerHTML = matches.map(x => teamRowHtml(x.team, x.league, true)).join('');
-}
-
+let discoverRenderToken = 0;
+let discoverAllTeams = null; // cached team list for activeLeague
 async function loadDiscoverTeams() {
   const myToken = ++discoverRenderToken;
-  const slug = state.discoverLeague;
+  const slug = activeLeague;
   const teams = await getTeams(slug);
-  if (myToken !== discoverRenderToken || state.tab !== 'discover' || state.discoverQuery) return;
+  if (myToken !== discoverRenderToken || state.tab !== 'discover') return;
+  discoverAllTeams = teams;
+  renderDiscoverList();
+}
+function renderDiscoverList() {
   const listEl = document.getElementById('discover-list');
   if (!listEl) return;
-  if (teams === null) {
-    listEl.innerHTML = `<div class="fetch-error">Couldn't load teams for ${esc(leagueName(slug))}. Try another league or check back later.</div>`;
+  if (discoverAllTeams === null) return; // still loading
+  if (discoverAllTeams === false) {
+    listEl.innerHTML = `<div class="fetch-error">Couldn't load teams for ${esc(leagueName(activeLeague))}. Check back later.</div>`;
     return;
   }
-  listEl.innerHTML = teams.map(t => teamRowHtml(t, slug, false)).join('') || `<div class="empty-state">No teams found.</div>`;
+  const q = state.discoverQuery.toLowerCase();
+  const teams = q ? discoverAllTeams.filter(t => t.name.toLowerCase().includes(q)) : discoverAllTeams;
+  if (!teams.length) {
+    listEl.innerHTML = `<div class="empty-state">No teams found${q ? ` for "${esc(state.discoverQuery)}"` : ''}.</div>`;
+    return;
+  }
+  listEl.innerHTML = teams.map(t => teamRowHtml(t, activeLeague)).join('');
 }
 
 // ─── RENDER: STANDINGS TAB ─────────────────────────────────────────────────
 function renderStandingsShell() {
-  return leagueChipsHtml(state.standingsLeague, 'standings-league') + `<div id="standings-list"><div class="loading-row">Loading standings…</div></div>`;
+  return `<div id="standings-list"><div class="loading-row">Loading standings…</div></div>`;
 }
 let standingsRenderToken = 0;
 async function loadStandings() {
   const myToken = ++standingsRenderToken;
-  const slug = state.standingsLeague;
+  const slug = activeLeague;
   const rows = await getStandings(slug);
   if (myToken !== standingsRenderToken || state.tab !== 'standings') return;
   const listEl = document.getElementById('standings-list');
@@ -817,11 +847,29 @@ function renderApp() {
     content.innerHTML = renderMyTeams();
   } else if (state.tab === 'discover') {
     content.innerHTML = renderDiscoverShell();
-    loadDiscoverBody();
+    discoverAllTeams = null;
+    loadDiscoverTeams();
   } else if (state.tab === 'standings') {
     content.innerHTML = renderStandingsShell();
     loadStandings();
   }
+}
+
+// Top-level render: onboarding league picker if no league chosen yet, else the tabbed app.
+function renderRoot() {
+  const tabsEl = document.getElementById('tabs');
+  const barEl = document.getElementById('league-bar');
+  const content = document.getElementById('content');
+  if (!activeLeague) {
+    tabsEl.style.display = 'none';
+    barEl.style.display = 'none';
+    content.innerHTML = renderLeaguePicker();
+    return;
+  }
+  tabsEl.style.display = '';
+  barEl.style.display = '';
+  document.getElementById('league-bar-name').textContent = leagueName(activeLeague);
+  renderApp();
 }
 
 function switchTab(tab) {
@@ -830,13 +878,28 @@ function switchTab(tab) {
   renderApp();
 }
 
+function pickLeague(slug) {
+  activeLeague = slug;
+  saveLeague(slug);
+  discoverAllTeams = null;
+  state.tab = 'myteams';
+  state.myTeamsMatches = null;
+  renderRoot();
+  refreshMyTeams();
+}
+
 // Event delegation
 document.getElementById('tabs').addEventListener('click', (e) => {
   const el = e.target.closest('[data-tab]');
   if (el) switchTab(el.dataset.tab);
 });
+document.getElementById('league-bar').addEventListener('click', (e) => {
+  if (e.target.closest('[data-change-league]')) changeLeague();
+});
 document.getElementById('content').addEventListener('click', (e) => {
-  let el = e.target.closest('[data-open-league]');
+  let el = e.target.closest('[data-pick-league]');
+  if (el) { pickLeague(el.dataset.pickLeague); return; }
+  el = e.target.closest('[data-open-league]');
   if (el) { openDetail(el.dataset.openLeague, el.dataset.openId); return; }
   el = e.target.closest('[data-close-detail]');
   if (el) { closeDetail(); return; }
@@ -844,10 +907,6 @@ document.getElementById('content').addEventListener('click', (e) => {
   if (el) { switchTab(el.dataset.gotoTab); return; }
   el = e.target.closest('[data-my-filter]');
   if (el) { state.myFilter = el.dataset.myFilter; renderApp(); return; }
-  el = e.target.closest('[data-discover-league]');
-  if (el) { state.discoverLeague = el.dataset.discoverLeague; renderApp(); return; }
-  el = e.target.closest('[data-standings-league]');
-  if (el) { state.standingsLeague = el.dataset.standingsLeague; renderApp(); return; }
   el = e.target.closest('[data-toggle-league]');
   if (el) {
     const willFollow = !isFollowed(el.dataset.toggleLeague, el.dataset.toggleId);
@@ -865,15 +924,10 @@ document.getElementById('content').addEventListener('click', (e) => {
   }
 });
 
-let discoverSearchDebounce = null;
 document.getElementById('content').addEventListener('input', (e) => {
   if (e.target && e.target.id === 'discover-search') {
-    const val = e.target.value.trim();
-    clearTimeout(discoverSearchDebounce);
-    discoverSearchDebounce = setTimeout(() => {
-      state.discoverQuery = val;
-      loadDiscoverBody();
-    }, 300);
+    state.discoverQuery = e.target.value.trim();
+    renderDiscoverList();
   }
 });
 
@@ -894,8 +948,8 @@ document.addEventListener('visibilitychange', () => {
 });
 
 // ─── INIT ───────────────────────────────────────────────────────────────────
-switchTab('myteams');
-refreshMyTeams();
+renderRoot();
+if (activeLeague) refreshMyTeams();
 </script>
 </body>
 </html>
